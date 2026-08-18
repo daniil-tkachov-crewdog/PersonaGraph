@@ -1,28 +1,40 @@
 /* Theme tokens.
    All colours, spacing, and radii live here as CSS custom properties so the
    rest of the stylesheet references intent ("--panel", "--accent") not raw
-   values. v1.0 ships a single dark theme; a light theme (Settings → General)
-   would later swap these variables without touching component CSS. */
+   values. v1.0 ships a single dark "glass/glow" theme; a light theme
+   (Settings → General) would later swap these variables without touching
+   component CSS. Palette matches the Claude Design redesign handoff. */
 
 :root {
-  /* Surfaces */
-  --bg: #0f1115;
-  --panel: #171a21;
-  --panel-2: #1e222b;
-  --border: #2a2f3a;
+  /* Base surfaces */
+  --bg: #0a0c10; /* app background (deepest) */
+  --panel: #12151b; /* sidebar / solid panels */
+  --panel-2: #161a21; /* raised controls */
+  /* Translucent "glass" fills layered over dark surfaces */
+  --glass: rgba(255, 255, 255, 0.035);
+  --glass-hover: rgba(43, 138, 239, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.06);
 
   /* Text */
-  --text: #e8ecf2;
-  --text-dim: #9aa4b2;
+  --text: #e9edf3;
+  --text-strong: #f4f7fb;
+  --text-dim: #7a8393;
+  --text-faint: #5b6472;
 
   /* Accents / semantics */
   --accent: #2b8aef;
-  --danger: #d1495b;
+  --accent-soft: rgba(43, 138, 239, 0.18);
+  --danger: #e06579;
   --positive: #3fb27f;
-  --neutral: #8a94a6;
+  --neutral: #6b7280;
 
   /* Shape */
-  --radius: 10px;
-  --radius-sm: 7px;
+  --radius: 16px; /* modals / large cards */
+  --radius-md: 9px; /* buttons */
+  --radius-sm: 8px; /* inputs / list items */
   --gap: 12px;
+
+  /* Type */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }

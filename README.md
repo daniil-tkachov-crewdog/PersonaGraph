@@ -98,5 +98,6 @@ npm run dev      # starts Vite + the Electron window
 npm run dist     # vite build + electron-builder (Windows .exe / nsis)
 ```
 
-Built with **Electron + React + Vite + Cytoscape.js (cola) + Zustand**. The
-`.exe` is produced on Windows (or CI); `npm run dev` works on any platform.
+Built with **Electron + React + Vite + Cytoscape.js (cola) + Zustand**, styled
+as a dark "glass/glow" theme with self-hosted **Inter** (`@fontsource/inter`).
+The `.exe` is produced on Windows (or CI); `npm run dev` works on any platform.

@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { useSettingsStore } from '../state/settingsStore.js';
+import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
 import { saveGraph } from '../io/saveGraph.js';
 import { loadGraph } from '../io/loadGraph.js';
 import AllConnections from './AllConnections.jsx';
@@ -14,6 +15,8 @@ export default function Sidebar({ onOpenPerson }) {
   const folded = useSettingsStore((s) => s.sidebarFolded);
   const toggle = useSettingsStore((s) => s.toggleSidebar);
   const setView = useSettingsStore((s) => s.setView);
+  // Total people (everyone except the Admin) for the "All Connections" badge.
+  const peopleCount = useGraphStore((s) => s.nodes.filter((n) => n.id !== ADMIN_ID).length);
 
   // Transient one-line status shown under the action buttons after save/load.
   const [status, setStatus] = useState(null);
@@ -51,23 +54,29 @@ export default function Sidebar({ onOpenPerson }) {
 
       {!folded && (
         <div className="sidebar-inner">
-          {/* Logo: plain white wordmark, per spec. */}
-          <div className="logo">PersonaGraph</div>
+          {/* Brand lockup: gradient "P" tile + wordmark. */}
+          <div className="brand-row">
+            <div className="logo-tile">P</div>
+            <span className="brand">PersonaGraph</span>
+          </div>
 
           {/* Primary graph file actions. */}
           <div className="sidebar-actions">
             <button className="btn block" onClick={handleSave}>
-              Save Graph
+              <span className="btn-ico">⤓</span>Save Graph
             </button>
             <button className="btn block" onClick={handleUpload}>
-              Upload Graph
+              <span className="btn-ico">⤴</span>Upload Graph
             </button>
           </div>
           {status && <div className="status-line">{status}</div>}
 
-          {/* Grouped list of every connection. */}
+          {/* Grouped list of every connection, with a running total. */}
           <div className="sidebar-section">
-            <h3 className="sidebar-heading">All Connections</h3>
+            <div className="sidebar-head">
+              <span className="sidebar-heading">All Connections</span>
+              <span className="sidebar-count">{peopleCount}</span>
+            </div>
             <AllConnections onOpenPerson={onOpenPerson} />
           </div>
 
@@ -77,7 +86,7 @@ export default function Sidebar({ onOpenPerson }) {
               Account <span className="soon">soon</span>
             </button>
             <button className="btn ghost block" onClick={() => setView('settings')}>
-              Settings
+              <span className="btn-ico">⚙</span>Settings
             </button>
           </div>
         </div>

@@ -4,60 +4,66 @@
 // Edge colour encodes connection type; the Admin node is visually distinct and
 // larger so "you" is always obvious at the centre.
 
+// Connection type → edge colour. Neutral is a faint white so only Good/Bad
+// draw the eye; positive green / negative red match the redesign palette.
 const TYPE_COLORS = {
-  neutral: '#8a94a6',
+  neutral: '#3a4150',
   positive: '#3fb27f',
-  negative: '#d1495b'
+  negative: '#e06579'
 };
 
 export const cytoscapeStyles = [
   // --- Person nodes -------------------------------------------------------
+  // Blue-tinted disc with a blue rim and a label beneath, matching the mock.
   {
     selector: 'node',
     style: {
-      'background-color': '#2b8aef', // accent blue
-      'border-color': '#1b1e24',
+      'background-color': '#123256', // blue-tinted fill over the dark canvas
+      'background-opacity': 0.95,
+      'border-color': 'rgba(43,138,239,0.75)',
       'border-width': 2,
       label: 'data(label)',
-      color: '#e8ecf2',
+      color: '#e9edf3',
+      'font-family': 'Inter, system-ui, sans-serif',
       'font-size': 12,
       'text-valign': 'bottom',
-      'text-margin-y': 6,
+      'text-margin-y': 7,
       'text-halign': 'center',
-      width: 34,
-      height: 34,
-      'text-outline-color': '#0f1115',
+      width: 42,
+      height: 42,
+      'text-outline-color': '#0a0c10',
       'text-outline-width': 2
     }
   },
   // --- Admin node ---------------------------------------------------------
-  // Bigger, white, ungrabbable feel — the fixed anchor of the whole graph.
+  // Bigger and white — the fixed, glowing anchor of the whole graph.
   {
     selector: 'node.admin',
     style: {
-      'background-color': '#f5f7fa',
-      'border-color': '#8a94a6',
-      color: '#ffffff',
-      'font-size': 14,
+      'background-color': '#ffffff',
+      'border-color': 'rgba(255,255,255,0.5)',
+      'border-width': 3,
+      color: '#f4f7fb',
+      'font-size': 13,
       'font-weight': 'bold',
-      width: 54,
-      height: 54
+      width: 58,
+      height: 58
     }
   },
   // Selected node highlight.
   {
     selector: 'node:selected',
-    style: { 'border-color': '#f5f7fa', 'border-width': 3 }
+    style: { 'border-color': '#8cc0f7', 'border-width': 3 }
   },
   // --- Edges (directed arrows) -------------------------------------------
   {
     selector: 'edge',
     style: {
-      width: 2,
+      width: 1.5,
       'line-color': (e) => TYPE_COLORS[e.data('type')] || TYPE_COLORS.neutral,
       'target-arrow-color': (e) => TYPE_COLORS[e.data('type')] || TYPE_COLORS.neutral,
       'target-arrow-shape': 'triangle',
-      'arrow-scale': 1,
+      'arrow-scale': 0.9,
       'curve-style': 'bezier',
       // Two directed edges between the same pair are separated so both arrows
       // are visible instead of overlapping into a single line.
@@ -66,6 +72,6 @@ export const cytoscapeStyles = [
   },
   {
     selector: 'edge:selected',
-    style: { width: 4 }
+    style: { width: 3.5 }
   }
 ];

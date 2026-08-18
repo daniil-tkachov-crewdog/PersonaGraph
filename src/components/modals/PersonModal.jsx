@@ -8,10 +8,17 @@
 import { useState } from 'react';
 import { useGraphStore, ADMIN_ID } from '../../state/graphStore.js';
 import { INFO_BLOCKS, CONNECTION_TYPES, blankSkill } from '../../data/fieldTemplates.js';
-import { GROUPS } from '../../data/groups.js';
+import { GROUPS, groupLabel } from '../../data/groups.js';
 import { neighborsOf, outgoingEdge } from '../../graph/edgeModel.js';
 
 const TABS = ['Info', 'Network', 'Notes', 'Actions'];
+
+// Up to two leading letters for the header avatar chip.
+function initials(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
 
 export default function PersonModal({
   personId,
@@ -27,11 +34,24 @@ export default function PersonModal({
   if (!person) return null;
   const isAdmin = person.id === ADMIN_ID;
 
+  // Header subtitle: "Group · Occupation" for people, "You" for the Admin.
+  const subtitle = isAdmin
+    ? 'You'
+    : [person.group ? groupLabel(person.group) : null, person.occupation]
+        .filter(Boolean)
+        .join(' · ');
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
-          <h2>{isAdmin ? `${person.name || 'Me'} (You)` : person.name || 'Person'}</h2>
+          <div className="person-head">
+            <div className="person-avatar">{initials(person.name)}</div>
+            <div>
+              <div className="person-name">{person.name || 'Person'}</div>
+              {subtitle && <div className="person-sub">{subtitle}</div>}
+            </div>
+          </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             ×
           </button>

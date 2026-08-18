@@ -13,6 +13,7 @@ import PersonModal from '../components/modals/PersonModal.jsx';
 import AddPersonModal from '../components/modals/AddPersonModal.jsx';
 import AddConnectionModal from '../components/modals/AddConnectionModal.jsx';
 import ConnectionModal from '../components/modals/ConnectionModal.jsx';
+import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
 
 export default function GraphPage() {
   const [personId, setPersonId] = useState(null); // PersonModal (the editor)
@@ -20,11 +21,20 @@ export default function GraphPage() {
   const [connectForId, setConnectForId] = useState(null); // AddConnectionModal
   const [edgeId, setEdgeId] = useState(null); // ConnectionModal (edge click)
 
+  // Live canvas stats. People exclude the Admin; each connection is two directed
+  // edges, so the connection count is edges / 2.
+  const peopleCount = useGraphStore((s) => s.nodes.filter((n) => n.id !== ADMIN_ID).length);
+  const connectionCount = useGraphStore((s) => Math.round(s.edges.length / 2));
+
   return (
     <div className="graph-page">
       <Sidebar onOpenPerson={setPersonId} />
 
       <main className="graph-main">
+        <div className="stats-overlay">
+          {peopleCount} {peopleCount === 1 ? 'person' : 'people'} · {connectionCount}{' '}
+          {connectionCount === 1 ? 'connection' : 'connections'}
+        </div>
         <GraphCanvas onOpenPerson={setPersonId} onOpenEdge={setEdgeId} />
       </main>
 
