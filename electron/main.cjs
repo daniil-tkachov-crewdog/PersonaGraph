@@ -1,15 +1,17 @@
-// Electron main process.
+// Electron main process (CommonJS).
 // Owns the OS-level concerns the renderer is not allowed to touch directly:
 // creating the window, and all native filesystem access (folder picker,
 // writing the graph file, opening a graph file). The renderer reaches these
-// only through the narrow `window.pg` bridge defined in preload.js.
+// only through the narrow `window.pg` bridge defined in preload.cjs.
+//
+// Why .cjs (not .js): the project's package.json sets "type":"module", which
+// would make a .js file ESM. Electron's ESM main-process loader is brittle and
+// was crashing on startup, so the two Electron process files are pinned to
+// CommonJS. The renderer under src/ stays ESM — Vite bundles it separately.
 
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
-import { readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { readFile, writeFile } = require('node:fs/promises');
+const path = require('node:path');
 
 // PG_DEV is set by the dev script; in dev we load the live Vite server so
 // hot-reload works, otherwise we load the static build from dist/.
@@ -29,7 +31,7 @@ function createWindow() {
     backgroundColor: '#0f1115',
     title: 'PersonaGraph',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false
     }

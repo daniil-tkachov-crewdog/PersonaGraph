@@ -18,8 +18,8 @@ part breaks it does not take the rest down with it.
 
 ```
 electron/                 Desktop shell (main process + preload bridge)
-  main.js                 Window creation + native filesystem/dialog IPC
-  preload.js              Exposes a narrow window.pg API to the renderer
+  main.cjs                Window creation + native filesystem/dialog IPC
+  preload.cjs             Exposes a narrow window.pg API to the renderer
 src/
   main.jsx                React entry point
   App.jsx                 Top-level view switch (Graph / Settings / Account)

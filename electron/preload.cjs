@@ -1,8 +1,10 @@
-// Preload bridge.
+// Preload bridge (CommonJS).
 // Runs in an isolated context with access to Electron internals, and exposes
-// ONLY these three functions to the renderer as `window.pg`. This is the whole
+// ONLY these functions to the renderer as `window.pg`. This is the whole
 // surface area the web app has to the OS — nothing else leaks in. Each call is
-// a thin wrapper over an ipcMain.handle in electron/main.js.
+// a thin wrapper over an ipcMain.handle in electron/main.cjs.
+// Must be CommonJS (require): preload runs before the page and needs `require`,
+// which would be unavailable if this were treated as an ESM module.
 
 const { contextBridge, ipcRenderer } = require('electron');
 
