@@ -1,165 +1,107 @@
-// PersonModal — opened by tapping a non-self node.
-//
-// Three blocks per spec:
-//   1. Personal Info — name/dob/age/location/job/hobbies/ethical-system
-//      + "Add new field" picker for global custom-field templates.
-//   2. Connections — list of edges incident to this node.
-//   3. Actions — Add connection / Delete person.
+// PersonModal — view and edit one person (node).
+// Renders a form from the PERSON_FIELDS template so fields are data-driven.
+// Also the launch point for the two node-scoped actions: "Add person from
+// here" (branching a new connection off this node — the ONLY way to add a
+// person) and, for non-Admin nodes, "Delete". The Admin node's structural
+// bits are protected: it can be renamed but never deleted, and its group is
+// not editable.
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useGraphStore } from '../../state/graphStore.js';
-import { ETHICAL_SYSTEMS } from '../../data/ethicalSystems.js';
-import { FIELD_TEMPLATES, findTemplate } from '../../data/fieldTemplates.js';
+import { useGraphStore, ADMIN_ID } from '../../state/graphStore.js';
+import { PERSON_FIELDS } from '../../data/fieldTemplates.js';
+import { GROUPS } from '../../data/groups.js';
 
-function calcAge(dob) {
-  // Whole-year age from ISO date string. Returns null if dob is unset.
-  if (!dob) return null;
-  const d = new Date(dob); if (isNaN(d)) return null;
-  const now = new Date();
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  return age;
-}
+export default function PersonModal({ personId, onClose, onAddFrom }) {
+  const person = useGraphStore((s) => s.nodes.find((n) => n.id === personId));
+  const updatePerson = useGraphStore((s) => s.updatePerson);
+  const deletePerson = useGraphStore((s) => s.deletePerson);
 
-export default function PersonModal() {
-  const id = useGraphStore(s => s.ui.personModalNodeId);
-  const setUi = useGraphStore(s => s.setUi);
-  const nodes = useGraphStore(s => s.nodes);
-  const edges = useGraphStore(s => s.edges);
-  const updateNode = useGraphStore(s => s.updateNode);
-  const deleteNode = useGraphStore(s => s.deleteNode);
-  const removeEdge = useGraphStore(s => s.removeEdge);
-  const addCustomField = useGraphStore(s => s.addCustomField);
-  const updateCustomField = useGraphStore(s => s.updateCustomField);
-  const removeCustomField = useGraphStore(s => s.removeCustomField);
+  // The node may have been deleted out from under the modal — fail safe.
+  if (!person) return null;
+  const isAdmin = person.id === ADMIN_ID;
 
-  const dialogRef = useRef(null);
-  const node = useMemo(() => nodes.find(n => n.id === id), [nodes, id]);
-  const incident = useMemo(
-    () => edges.filter(e => e.source === id || e.target === id),
-    [edges, id]
-  );
+  // Render one field row according to its declared type.
+  function renderField(field) {
+    // The Admin has no editable "group" (it represents you, not a connection).
+    if (field.key === 'group' && isAdmin) return null;
+    const value = person[field.key] ?? '';
 
-  const [pickerTemplate, setPickerTemplate] = useState(FIELD_TEMPLATES[0]?.id || '');
+    if (field.type === 'group') {
+      return (
+        <label key={field.key} className="field">
+          <span>{field.label}</span>
+          <select
+            value={value}
+            onChange={(e) => updatePerson(person.id, { group: e.target.value })}
+          >
+            {GROUPS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
 
-  useEffect(() => {
-    const d = dialogRef.current; if (!d) return;
-    if (id && !d.open) d.showModal();
-    if (!id && d.open) d.close();
-  }, [id]);
+    if (field.type === 'textarea') {
+      return (
+        <label key={field.key} className="field">
+          <span>{field.label}</span>
+          <textarea
+            rows={3}
+            value={value}
+            onChange={(e) => updatePerson(person.id, { [field.key]: e.target.value })}
+          />
+        </label>
+      );
+    }
 
-  if (!node) return <dialog ref={dialogRef} className="modal" />;
-
-  function close() { setUi({ personModalNodeId: null }); }
-
-  function patch(field) {
-    return (e) => updateNode(node.id, { [field]: e.target.value });
+    return (
+      <label key={field.key} className="field">
+        <span>
+          {field.label}
+          {field.required ? ' *' : ''}
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => updatePerson(person.id, { [field.key]: e.target.value })}
+        />
+      </label>
+    );
   }
-
-  function onDelete() {
-    if (!confirm(`Delete ${node.name || 'this person'}? This also removes all their connections.`)) return;
-    deleteNode(node.id);
-    close();
-  }
-
-  function onAddConnection() {
-    setUi({ addConnectionOpen: true, addConnectionSourceId: node.id, personModalNodeId: null });
-  }
-
-  function onAddField() {
-    if (!pickerTemplate) return;
-    addCustomField(node.id, pickerTemplate);
-  }
-
-  const age = calcAge(node.dob);
-  const otherName = (otherId) => {
-    const o = nodes.find(n => n.id === otherId);
-    return o ? `[${o.number}] ${o.name || '—'}` : otherId;
-  };
 
   return (
-    <dialog ref={dialogRef} className="modal" onClose={close}>
-      <div className="modal-head">[{node.number}] {node.name || 'Unnamed'}</div>
-      <div className="modal-body">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>{isAdmin ? 'You (Admin)' : 'Person'}</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </header>
 
-        {/* ---- Personal Info ---- */}
-        <div className="block">
-          <h3>Personal Info</h3>
-          <label>Name<input value={node.name} onChange={patch('name')} /></label>
-          <label>
-            Date of birth
-            <input type="date" value={node.dob || ''} onChange={patch('dob')} />
-          </label>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {age != null ? `Age: ${age}` : 'Age: —'}
-          </div>
-          <label>Location<input value={node.location} onChange={patch('location')} /></label>
-          <label>Job<input value={node.job} onChange={patch('job')} /></label>
-          <label>Hobbies<input value={node.hobbies} onChange={patch('hobbies')} /></label>
-          <label>
-            Ethical System
-            <select value={node.ethicalSystem} onChange={patch('ethicalSystem')}>
-              {ETHICAL_SYSTEMS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-            </select>
-          </label>
+        <div className="modal-body">{PERSON_FIELDS.map(renderField)}</div>
 
-          {/* Custom field instances */}
-          {node.customFields.map(f => {
-            const tpl = findTemplate(f.templateId);
-            return (
-              <label key={f.id}>
-                {tpl?.label || f.templateId}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    style={{ flex: 1 }}
-                    value={f.value}
-                    onChange={e => updateCustomField(node.id, f.id, e.target.value)}
-                  />
-                  <button type="button" onClick={() => removeCustomField(node.id, f.id)}>×</button>
-                </div>
-              </label>
-            );
-          })}
-
-          {/* Add-field picker */}
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <select value={pickerTemplate} onChange={e => setPickerTemplate(e.target.value)} style={{ flex: 1 }}>
-              {FIELD_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
-            <button type="button" onClick={onAddField}>+ Add field</button>
-          </div>
-        </div>
-
-        {/* ---- Connections ---- */}
-        <div className="block">
-          <h3>Connections</h3>
-          {incident.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12 }}>No connections yet.</div>}
-          {incident.map(e => {
-            const otherId = e.source === node.id ? e.target : e.source;
-            return (
-              <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                <span style={{ fontSize: 12 }}>
-                  {otherName(otherId)} — <em>{e.form}</em> · <em>{e.color}</em> · {e.lanes} lane(s)
-                </span>
-                <button type="button" onClick={() => removeEdge(e.id)}>Remove</button>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ---- Actions ---- */}
-        <div className="block">
-          <h3>Actions</h3>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button type="button" onClick={onAddConnection}>+ Add connection</button>
-            <button type="button" className="btn-danger" onClick={onDelete}>Delete this Person</button>
-          </div>
-        </div>
+        <footer className="modal-foot">
+          {/* The sanctioned way to grow the graph: branch from THIS node. */}
+          <button className="btn primary" onClick={() => onAddFrom(person.id)}>
+            + Add person from here
+          </button>
+          {/* Admin can never be deleted. */}
+          {!isAdmin && (
+            <button
+              className="btn danger"
+              onClick={() => {
+                deletePerson(person.id);
+                onClose();
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </footer>
       </div>
-      <div className="modal-foot">
-        <button type="button" onClick={close}>Close</button>
-      </div>
-    </dialog>
+    </div>
   );
 }

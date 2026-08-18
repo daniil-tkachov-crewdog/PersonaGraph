@@ -2,14 +2,20 @@
   "name": "personagraph",
   "private": true,
   "version": "1.0.0",
+  "description": "PersonaGraph — a Windows desktop knowledge-graph of your social connections.",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env PG_DEV=1 electron .",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist": "vite build && electron-builder --win nsis"
   },
   "dependencies": {
     "cytoscape": "^3.30.0",
+    "cytoscape-cola": "^2.5.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^10.0.0",
@@ -17,6 +23,25 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.0"
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^32.1.2",
+    "electron-builder": "^25.0.5",
+    "vite": "^5.4.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.personagraph.app",
+    "productName": "PersonaGraph",
+    "files": [
+      "dist/**",
+      "electron/**"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }

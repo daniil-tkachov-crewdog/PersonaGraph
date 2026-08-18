@@ -1,162 +1,127 @@
-// Central app state, powered by Zustand.
-//
-// Holds:
-//   - nodes:  array of Node objects (one is the self node, isSelf=true)
-//   - edges:  array of Edge objects (form/color/lanes triple)
-//   - theme:  'light' | 'dark'
-//   - UI selection state for currently-open modals
-//
-// Caveat: nodes/edges are stored as plain arrays (not maps) for
-// straightforward JSON round-tripping. Lookups by id are O(n); fine for
-// personal-scale data (hundreds of people).
+// Graph store (Zustand).
+// The single source of truth for the graph: the fixed Admin node, all person
+// nodes, and all directed edges. Every mutation the UI performs goes through an
+// action here so the invariants hold in ONE place:
+//   - the Admin node always exists, is never deleted, never moved;
+//   - no person node is ever orphaned (each is created FROM an existing node,
+//     which immediately gives it a two-way connection);
+//   - every connection is a pair of directed edges (see graph/edgeModel.js).
 
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
-import { reflowNumbers, SELF_NUMBER } from './numbering.js';
-import { DEFAULT_ETHICAL_SYSTEM } from '../data/ethicalSystems.js';
+import { DEFAULT_GROUP } from '../data/groups.js';
+import { DEFAULT_CONNECTION_TYPE } from '../data/fieldTemplates.js';
+import { makeTwoWay, directedId } from '../graph/edgeModel.js';
 
-function makeSelf() {
-  // The self node is fixed at center, locked from drag/delete.
-  return {
-    id: uuid(),
-    number: SELF_NUMBER,
-    isSelf: true,
-    name: 'Me',
-    dob: null,
-    location: '',
-    job: '',
-    hobbies: '',
-    ethicalSystem: DEFAULT_ETHICAL_SYSTEM,
-    customFields: [],
-    position: { x: 0, y: 0 }
-  };
-}
+// The Admin node's id is a constant so every module can recognise "self".
+export const ADMIN_ID = 'admin';
 
-function makePerson(name) {
+// Factory for the initial graph: just the Admin node, centred and alone.
+// Kept as a function so "New graph" / first load start from a clean copy.
+function initialGraph() {
   return {
-    id: uuid(),
-    number: '', // filled in by reflowNumbers
-    isSelf: false,
-    name: name || '',
-    dob: null,
-    location: '',
-    job: '',
-    hobbies: '',
-    ethicalSystem: DEFAULT_ETHICAL_SYSTEM,
-    customFields: [],
-    // Random scatter near center; layout will refine when physics runs.
-    position: { x: (Math.random() - 0.5) * 400, y: (Math.random() - 0.5) * 400 }
+    adminName: 'Me',
+    nodes: [
+      // The Admin node. `fixed` marks it un-deletable and pinned in physics.
+      { id: ADMIN_ID, name: 'Me', group: 'self', fixed: true }
+    ],
+    edges: []
   };
 }
 
 export const useGraphStore = create((set, get) => ({
-  nodes: [makeSelf()],
-  edges: [],
-  theme: 'light',
+  ...initialGraph(),
 
-  // Modal/UI state. Kept in the store so any component can open/close
-  // without prop-drilling.
-  ui: {
-    personModalNodeId: null,   // open PersonModal for this id
-    addPersonOpen: false,
-    addConnectionOpen: false,
-    addConnectionSourceId: null, // when initiated from a node, prefill source
-    highlightNodeId: null
+  // Rename the Admin node. The label also feeds the saved filename, so we keep
+  // the node's `name` and the top-level `adminName` in sync.
+  setAdminName: (name) =>
+    set((s) => ({
+      adminName: name,
+      nodes: s.nodes.map((n) => (n.id === ADMIN_ID ? { ...n, name } : n))
+    })),
+
+  // Add a person. MUST be called with the id of the node it branches from,
+  // enforcing the "no orphan nodes" rule — the new person is born already
+  // connected two-way (default neutral) to its origin.
+  addPerson: (fromId) => {
+    const origin = get().nodes.find((n) => n.id === fromId);
+    if (!origin) return null; // guard: can't branch from a node that's gone
+    const id = uuid();
+    const person = {
+      id,
+      name: 'New person',
+      group: DEFAULT_GROUP,
+      phone: '',
+      email: '',
+      location: '',
+      notes: ''
+    };
+    set((s) => ({
+      nodes: [...s.nodes, person],
+      edges: [...s.edges, ...makeTwoWay(fromId, id, DEFAULT_CONNECTION_TYPE)]
+    }));
+    return id;
   },
 
-  // ---------- mutations ----------
-
-  setTheme: (theme) => set({ theme }),
-
-  toggleTheme: () => set(s => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
-
-  // Add a new person. Per spec, name is required at creation time; other
-  // fields can be filled later via the PersonModal.
-  addPerson: (name) => {
-    const person = makePerson(name);
-    set(s => ({ nodes: reflowNumbers([...s.nodes, person]) }));
-    return person.id;
+  // Patch a person's fields. Ignores the Admin's structural flags; renaming the
+  // Admin is routed through setAdminName instead to keep adminName in sync.
+  updatePerson: (id, patch) => {
+    if (id === ADMIN_ID && patch.name != null) {
+      get().setAdminName(patch.name);
+      const { name, ...rest } = patch;
+      if (Object.keys(rest).length === 0) return;
+      patch = rest;
+    }
+    set((s) => ({
+      nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n))
+    }));
   },
 
-  // Update a node by id. Any fields in `patch` are merged in.
-  updateNode: (id, patch) => set(s => ({
-    nodes: s.nodes.map(n => n.id === id ? { ...n, ...patch } : n)
-  })),
-
-  // Delete a node. Removes all incident edges and reflows numbers.
-  // Refuses to delete the self node.
-  deleteNode: (id) => set(s => {
-    const target = s.nodes.find(n => n.id === id);
-    if (!target || target.isSelf) return s;
-    const nodes = reflowNumbers(s.nodes.filter(n => n.id !== id));
-    const edges = s.edges.filter(e => e.source !== id && e.target !== id);
-    return { nodes, edges };
-  }),
-
-  // Persist a node's current canvas position (after a drag).
-  setNodePosition: (id, position) => set(s => ({
-    nodes: s.nodes.map(n => n.id === id ? { ...n, position } : n)
-  })),
-
-  // Add an edge. We do NOT enforce uniqueness of (source,target) — the user
-  // may want multiple connections with different forms/colors/lanes.
-  addEdge: ({ source, target, form, color, lanes }) => {
-    if (source === target) return null; // no self-loops
-    const edge = { id: uuid(), source, target, form, color, lanes };
-    set(s => ({ edges: [...s.edges, edge] }));
-    return edge.id;
+  // Delete a person and every edge touching it. The Admin node is protected:
+  // attempting to delete it is a no-op.
+  deletePerson: (id) => {
+    if (id === ADMIN_ID) return;
+    set((s) => ({
+      nodes: s.nodes.filter((n) => n.id !== id),
+      edges: s.edges.filter((e) => e.source !== id && e.target !== id)
+    }));
   },
 
-  updateEdge: (id, patch) => set(s => ({
-    edges: s.edges.map(e => e.id === id ? { ...e, ...patch } : e)
-  })),
+  // Change the type of ONE directed edge (one arrow of a connection). The two
+  // directions are edited independently, matching the two-arrow model.
+  setEdgeType: (edgeId, type) =>
+    set((s) => ({
+      edges: s.edges.map((e) => (e.id === edgeId ? { ...e, type } : e))
+    })),
 
-  removeEdge: (id) => set(s => ({ edges: s.edges.filter(e => e.id !== id) })),
+  // Add a connection between two EXISTING nodes that aren't linked yet. Skips
+  // any direction that already exists so we never create duplicate arrows.
+  connect: (a, b, type = DEFAULT_CONNECTION_TYPE) =>
+    set((s) => {
+      const have = new Set(s.edges.map((e) => e.id));
+      const fresh = makeTwoWay(a, b, type).filter((e) => !have.has(e.id));
+      return { edges: [...s.edges, ...fresh] };
+    }),
 
-  // ---------- custom fields on a node ----------
-
-  addCustomField: (nodeId, templateId) => set(s => ({
-    nodes: s.nodes.map(n => n.id === nodeId
-      ? { ...n, customFields: [...n.customFields, { id: crypto.randomUUID(), templateId, value: '' }] }
-      : n)
-  })),
-
-  updateCustomField: (nodeId, fieldId, value) => set(s => ({
-    nodes: s.nodes.map(n => n.id === nodeId
-      ? { ...n, customFields: n.customFields.map(f => f.id === fieldId ? { ...f, value } : f) }
-      : n)
-  })),
-
-  removeCustomField: (nodeId, fieldId) => set(s => ({
-    nodes: s.nodes.map(n => n.id === nodeId
-      ? { ...n, customFields: n.customFields.filter(f => f.id !== fieldId) }
-      : n)
-  })),
-
-  // ---------- UI helpers ----------
-
-  setUi: (patch) => set(s => ({ ui: { ...s.ui, ...patch } })),
-
-  // Replace the entire graph with a loaded JSON payload.
-  // Caveat: trusts the shape of the input — invalid JSON should be caught
-  // at the io/saveJson.js boundary before reaching this method.
-  loadSnapshot: (snapshot) => {
-    if (!snapshot || !Array.isArray(snapshot.nodes)) return;
-    // Ensure exactly one self node exists; if the loaded data lacks one,
-    // create one rather than leave the graph headless.
-    let nodes = snapshot.nodes.slice();
-    const hasSelf = nodes.some(n => n.isSelf);
-    if (!hasSelf) nodes = [makeSelf(), ...nodes];
-    nodes = reflowNumbers(nodes);
+  // Replace the whole graph (used by "Upload Graph"). Defensive defaults keep
+  // the app alive even if an older/edited file is missing pieces; the Admin
+  // node is re-asserted so a malformed file can never leave us without it.
+  replaceGraph: ({ adminName, nodes, edges }) => {
+    const safeNodes = Array.isArray(nodes) ? nodes : [];
+    const hasAdmin = safeNodes.some((n) => n.id === ADMIN_ID);
+    const finalNodes = hasAdmin
+      ? safeNodes
+      : [{ id: ADMIN_ID, name: adminName || 'Me', group: 'self', fixed: true }, ...safeNodes];
     set({
-      nodes,
-      edges: Array.isArray(snapshot.edges) ? snapshot.edges.slice() : []
+      adminName: adminName || 'Me',
+      nodes: finalNodes,
+      edges: Array.isArray(edges) ? edges : []
     });
   },
 
-  // Return a serializable plain object for Save JSON.
-  snapshot: () => {
-    const { nodes, edges } = get();
-    return { version: 1, nodes, edges };
-  }
+  // Reset to a brand-new single-Admin graph.
+  resetGraph: () => set(initialGraph())
 }));
+
+// Re-export so callers building ad-hoc edges share the same id scheme.
+export { directedId };

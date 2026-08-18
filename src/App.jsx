@@ -1,31 +1,18 @@
-// App shell: wires the sidebar, the graph canvas, and the modals together.
-// Theme is applied as a `data-theme` attribute on <html> so CSS variables
-// in theme.css can switch in one place.
+// App — top-level view switch.
+// PersonaGraph has no router; it's a single-window desktop app with three
+// mutually exclusive pages. The active page is driven by settingsStore.view so
+// any component (e.g. the sidebar's Settings button) can navigate by setting a
+// value. Deliberately dumb: no data logic lives here.
 
-import React, { useEffect } from 'react';
-import { useGraphStore } from './state/graphStore.js';
-import Sidebar from './components/Sidebar.jsx';
-import GraphCanvas from './graph/GraphCanvas.jsx';
-import AddPersonModal from './components/modals/AddPersonModal.jsx';
-import AddConnectionModal from './components/modals/AddConnectionModal.jsx';
-import PersonModal from './components/modals/PersonModal.jsx';
+import { useSettingsStore } from './state/settingsStore.js';
+import GraphPage from './pages/GraphPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
+import AccountPage from './pages/AccountPage.jsx';
 
 export default function App() {
-  const theme = useGraphStore(s => s.theme);
+  const view = useSettingsStore((s) => s.view);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  return (
-    <div className="app">
-      <Sidebar />
-      <main className="graph-area">
-        <GraphCanvas />
-      </main>
-      <AddPersonModal />
-      <AddConnectionModal />
-      <PersonModal />
-    </div>
-  );
+  if (view === 'settings') return <SettingsPage />;
+  if (view === 'account') return <AccountPage />;
+  return <GraphPage />;
 }

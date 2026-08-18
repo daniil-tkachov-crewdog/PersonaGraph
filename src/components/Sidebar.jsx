@@ -1,72 +1,87 @@
-// Left-side menu. Per spec it has exactly the buttons listed below;
-// behaviors are wired by the parent (App) via the store.
+// Sidebar — the foldable left menu.
+// Assembles the fixed chrome of the Graph page: the logo, the Save/Upload
+// actions, the grouped "All Connections" list, and navigation to Account
+// (coming soon) and Settings. It owns the small amount of transient UI state
+// for save/load feedback; the heavy lifting lives in io/ and the stores.
 
-import React, { useState } from 'react';
-import { useGraphStore } from '../state/graphStore.js';
-import { saveSnapshotToFile, loadSnapshotFromFile } from '../io/saveJson.js';
+import { useState } from 'react';
+import { useSettingsStore } from '../state/settingsStore.js';
+import { saveGraph } from '../io/saveGraph.js';
+import { loadGraph } from '../io/loadGraph.js';
+import AllConnections from './AllConnections.jsx';
 
-export default function Sidebar() {
-  const setUi = useGraphStore(s => s.setUi);
-  const toggleTheme = useGraphStore(s => s.toggleTheme);
-  const theme = useGraphStore(s => s.theme);
-  const nodes = useGraphStore(s => s.nodes);
-  const snapshot = useGraphStore(s => s.snapshot);
-  const loadSnapshot = useGraphStore(s => s.loadSnapshot);
+export default function Sidebar({ onOpenPerson }) {
+  const folded = useSettingsStore((s) => s.sidebarFolded);
+  const toggle = useSettingsStore((s) => s.toggleSidebar);
+  const setView = useSettingsStore((s) => s.setView);
 
-  const [query, setQuery] = useState('');
+  // Transient one-line status shown under the action buttons after save/load.
+  const [status, setStatus] = useState(null);
+  const flash = (msg) => {
+    setStatus(msg);
+    setTimeout(() => setStatus(null), 4000);
+  };
 
-  // Search by name only (case-insensitive substring). On match, set the
-  // highlight id; GraphCanvas reacts and centers/outlines the node.
-  function onSearch(e) {
-    e.preventDefault();
-    if (!query.trim()) return;
-    const q = query.trim().toLowerCase();
-    const hit = nodes.find(n => !n.isSelf && n.name.toLowerCase().includes(q));
-    setUi({ highlightNodeId: hit ? hit.id : null });
-    if (!hit) alert('No person matches that name.');
-  }
-
-  async function onSave() {
-    try { await saveSnapshotToFile(snapshot()); }
-    catch (err) { if (err?.name !== 'AbortError') alert('Save failed: ' + err.message); }
-  }
-
-  async function onLoad() {
+  // Save: delegate to io/saveGraph and translate the result/error into a flash.
+  async function handleSave() {
     try {
-      const data = await loadSnapshotFromFile();
-      if (!data) return;
-      // Confirm overwrite if there's already user data beyond the self node.
-      const hasData = nodes.length > 1;
-      if (hasData && !confirm('Replace the current graph with the loaded file?')) return;
-      loadSnapshot(data);
-    } catch (err) { if (err?.name !== 'AbortError') alert('Load failed: ' + err.message); }
+      const path = await saveGraph();
+      flash(`Saved: ${path}`);
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
+  // Upload: delegate to io/loadGraph; ignore a plain cancel, report errors.
+  async function handleUpload() {
+    try {
+      const ok = await loadGraph();
+      if (ok) flash('Graph loaded.');
+    } catch (err) {
+      flash(err.message);
+    }
   }
 
   return (
-    <aside className="sidebar">
-      <h1>PersonaGraph</h1>
-      <p className="subtitle">Your personal sociograph</p>
+    <aside className={`sidebar ${folded ? 'folded' : ''}`}>
+      {/* Fold/unfold toggle sits at the very top-left edge. */}
+      <button className="fold-btn" onClick={toggle} aria-label="Toggle sidebar">
+        {folded ? '»' : '«'}
+      </button>
 
-      <button onClick={() => setUi({ addPersonOpen: true })}>+ Add a Person</button>
-      <button onClick={() => setUi({ addConnectionOpen: true, addConnectionSourceId: null })}>+ Add a Connection</button>
+      {!folded && (
+        <div className="sidebar-inner">
+          {/* Logo: plain white wordmark, per spec. */}
+          <div className="logo">PersonaGraph</div>
 
-      <form onSubmit={onSearch} style={{ display: 'contents' }}>
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search for a person by name..."
-        />
-        <button type="submit">Find</button>
-      </form>
+          {/* Primary graph file actions. */}
+          <div className="sidebar-actions">
+            <button className="btn block" onClick={handleSave}>
+              Save Graph
+            </button>
+            <button className="btn block" onClick={handleUpload}>
+              Upload Graph
+            </button>
+          </div>
+          {status && <div className="status-line">{status}</div>}
 
-      <button onClick={onSave}>Save JSON…</button>
-      <button onClick={onLoad}>Load JSON…</button>
-      <button onClick={toggleTheme}>Mode: {theme === 'light' ? 'Light' : 'Dark'}</button>
+          {/* Grouped list of every connection. */}
+          <div className="sidebar-section">
+            <h3 className="sidebar-heading">All Connections</h3>
+            <AllConnections onOpenPerson={onOpenPerson} />
+          </div>
 
-      <p className="subtitle" style={{ marginTop: 'auto' }}>
-        Node <strong>[000-000]</strong> is you. It cannot be moved or deleted.
-      </p>
+          {/* Footer nav. Account is not built yet. */}
+          <div className="sidebar-footer">
+            <button className="btn ghost block" disabled title="Coming soon">
+              Account <span className="soon">soon</span>
+            </button>
+            <button className="btn ghost block" onClick={() => setView('settings')}>
+              Settings
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
