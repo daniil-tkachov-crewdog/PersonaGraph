@@ -57,8 +57,13 @@ src/
   nodes follow. Every connection is **two directed arrows** (forward + back).
 - **Add Person** — only from an existing node, so no person is ever orphaned.
   New people arrive with a default two-way *neutral* connection.
-- **Add Connection** — each arrow's type (neutral / positive / negative) is
-  editable independently.
+- **Add Connection** — each arrow's type (Good / Neutral / Bad → green / grey /
+  red) is editable independently.
+- **Node editor** — a tabbed pop-up per person: *Info* (General + Contacts
+  profile blocks and a repeatable Speciality & Skills list), *Network* (this
+  person's connections with a per-arrow type dropdown and remove, plus Add
+  Connection and Add new person), *Notes* (freeform text), and *Actions* (delete
+  the node; notifications *coming soon*).
 - **Save Graph** — writes the full graph (all nodes, edges, and their data) plus
   metadata (saved-at time) as JSON into the folder chosen in Settings → Sync.
   Filename: `PG_[admin_name]_[dd-mm-yy]_[HH-MM].json`.

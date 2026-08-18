@@ -1,24 +1,59 @@
-// Person data fields.
-// The set of editable attributes each node (person) can hold, driving the
-// PersonModal form. Declaring them as data — not hard-coded JSX — means a new
-// field is added in one place and the form, serializer, and loader all follow.
-// Caveat: `name` is treated as required elsewhere; the rest are optional.
+// Person data templates.
+// The editable profile is described as DATA here (not hard-coded JSX) so the
+// PersonModal form, the store's person factory, and the serializer all follow
+// one definition. Fields are grouped into "blocks" that map to the visual
+// blocks inside the Info tab. Field `type` drives which input renders.
 
-export const PERSON_FIELDS = [
-  { key: 'name', label: 'Name', type: 'text', required: true },
-  { key: 'group', label: 'Group', type: 'group' }, // rendered as a <select> of GROUPS
-  { key: 'phone', label: 'Phone', type: 'text' },
-  { key: 'email', label: 'Email', type: 'text' },
-  { key: 'location', label: 'Location', type: 'text' },
-  { key: 'notes', label: 'Notes', type: 'textarea' }
+// Info tab blocks. `group` renders a <select> of GROUPS; `date` a date input;
+// everything else a plain text input. `name` is treated as required.
+export const INFO_BLOCKS = [
+  {
+    title: 'General',
+    fields: [
+      { key: 'name', label: 'Name', type: 'text', required: true },
+      { key: 'group', label: 'Group', type: 'group' },
+      { key: 'age', label: 'Age', type: 'text' },
+      { key: 'dob', label: 'Date of Birth', type: 'date' },
+      { key: 'location', label: 'Location', type: 'text' },
+      { key: 'nationality', label: 'Nationality', type: 'text' },
+      { key: 'occupation', label: 'Occupation', type: 'text' },
+      { key: 'familyStatus', label: 'Family status', type: 'text' },
+      { key: 'citizenship', label: 'Citizenship', type: 'text' }
+    ]
+  },
+  {
+    title: 'Contacts',
+    fields: [
+      { key: 'phone', label: 'Phone number', type: 'text' },
+      { key: 'email', label: 'Email', type: 'text' },
+      { key: 'whatsapp', label: 'WhatsApp', type: 'text' },
+      { key: 'telegram', label: 'Telegram', type: 'text' },
+      { key: 'instagram', label: 'Instagram', type: 'text' },
+      { key: 'facebook', label: 'Facebook', type: 'text' },
+      { key: 'linkedin', label: 'LinkedIn', type: 'text' },
+      { key: 'tiktok', label: 'TikTok', type: 'text' }
+    ]
+  }
 ];
 
-// Connection (edge) semantics offered in the ConnectionModal. "neutral" is the
-// default applied when a new person is added, per the spec.
+// Flat list of every profile field key, used by the person factory to seed a
+// new node with empty strings so inputs stay controlled from the start.
+export const PROFILE_KEYS = INFO_BLOCKS.flatMap((b) => b.fields.map((f) => f.key));
+
+// Connection (edge) semantics shown in the Network tab and ConnectionModal.
+// Labels are the user-facing Good/Neutral/Bad; the ids stay
+// positive/neutral/negative because cytoscapeStyles.js maps those ids to the
+// green/grey/red edge colours. "neutral" is the default for a new connection.
 export const CONNECTION_TYPES = [
+  { id: 'positive', label: 'Good' },
   { id: 'neutral', label: 'Neutral' },
-  { id: 'positive', label: 'Positive' },
-  { id: 'negative', label: 'Negative' }
+  { id: 'negative', label: 'Bad' }
 ];
 
 export const DEFAULT_CONNECTION_TYPE = 'neutral';
+
+// A blank skill row for the "Speciality & Skills" block. Each person holds a
+// `skills` array of { area, skill }.
+export function blankSkill() {
+  return { area: '', skill: '' };
+}

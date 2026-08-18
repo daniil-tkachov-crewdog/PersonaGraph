@@ -276,6 +276,153 @@ h4 {
   border-color: var(--accent);
 }
 
+/* --- Tabbed node editor ------------------------------------------------- */
+/* Wider modal for the profile editor. */
+.modal-lg {
+  width: 560px;
+}
+/* Tab strip sits under the header. */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+}
+.modal-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* Info blocks: a titled section holding a 2-column grid of fields. */
+.info-block {
+  margin-bottom: 20px;
+}
+.block-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Skill rows: [area] [skill] [remove]. */
+.skill-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.skill-row input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px;
+  font-size: 13px;
+}
+
+/* Network tab rows: Name | type dropdown | remove. */
+.network-list {
+  margin-bottom: 16px;
+}
+.network-row {
+  display: grid;
+  grid-template-columns: 1fr 130px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.network-row select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 7px;
+  font-size: 13px;
+}
+.link-name {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+.link-name:hover {
+  color: var(--accent);
+}
+.network-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Notes tab. */
+.notes-area {
+  width: 100%;
+  min-height: 220px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+.notes-area:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Actions tab. */
+.actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Pick list (Add Connection). */
+.pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.pick-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pick-item:hover {
+  border-color: var(--accent);
+}
+
 /* --- Settings / Account pages ------------------------------------------ */
 .settings-page,
 .account-page {

@@ -31,3 +31,21 @@ export function twoWayBetween(edges, a, b) {
     backward: edges.find((e) => e.source === b && e.target === a)
   };
 }
+
+// Unique ids of every node connected to `id` in either direction. Drives the
+// Network tab's connection list and the "unconnected nodes" filter for the
+// Add Connection picker.
+export function neighborsOf(edges, id) {
+  const set = new Set();
+  for (const e of edges) {
+    if (e.source === id) set.add(e.target);
+    else if (e.target === id) set.add(e.source);
+  }
+  return [...set];
+}
+
+// The single directed edge from `from` to `to`, i.e. the outgoing arrow the
+// Network dropdown edits. Undefined if that direction doesn't exist.
+export function outgoingEdge(edges, from, to) {
+  return edges.find((e) => e.source === from && e.target === to);
+}

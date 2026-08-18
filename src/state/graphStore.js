@@ -10,7 +10,7 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
 import { DEFAULT_GROUP } from '../data/groups.js';
-import { DEFAULT_CONNECTION_TYPE } from '../data/fieldTemplates.js';
+import { DEFAULT_CONNECTION_TYPE, PROFILE_KEYS } from '../data/fieldTemplates.js';
 import { makeTwoWay, directedId } from '../graph/edgeModel.js';
 
 // The Admin node's id is a constant so every module can recognise "self".
@@ -47,13 +47,15 @@ export const useGraphStore = create((set, get) => ({
     const origin = get().nodes.find((n) => n.id === fromId);
     if (!origin) return null; // guard: can't branch from a node that's gone
     const id = uuid();
+    // Seed every profile field as an empty string (from the template) so form
+    // inputs stay controlled, then set the sensible non-empty defaults.
+    const blank = Object.fromEntries(PROFILE_KEYS.map((k) => [k, '']));
     const person = {
       id,
+      ...blank,
       name: 'New person',
       group: DEFAULT_GROUP,
-      phone: '',
-      email: '',
-      location: '',
+      skills: [], // Speciality & Skills rows: { area, skill }
       notes: ''
     };
     set((s) => ({
@@ -102,6 +104,16 @@ export const useGraphStore = create((set, get) => ({
       const fresh = makeTwoWay(a, b, type).filter((e) => !have.has(e.id));
       return { edges: [...s.edges, ...fresh] };
     }),
+
+  // Remove a whole connection: BOTH directed edges between a and b (the ✕ in
+  // the Network tab). Order-independent; leaves the two nodes in place.
+  disconnect: (a, b) =>
+    set((s) => ({
+      edges: s.edges.filter(
+        (e) =>
+          !(e.source === a && e.target === b) && !(e.source === b && e.target === a)
+      )
+    })),
 
   // Replace the whole graph (used by "Upload Graph"). Defensive defaults keep
   // the app alive even if an older/edited file is missing pieces; the Admin

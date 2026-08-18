@@ -1,21 +1,24 @@
 // GraphPage — composes the whole graph experience and owns modal selection.
 // It wires the two ways a person can be opened (canvas tap and sidebar click)
-// to a single PersonModal, plus the AddPerson and Connection modals. Keeping
-// this selection state here (not in a global store) means closing a modal is
-// just local state and can never corrupt the graph.
+// to the tabbed PersonModal, and the two node-scoped flows that modal spawns:
+// AddPersonModal (a brand-new connected node) and AddConnectionModal (link to
+// an existing node). ConnectionModal still handles direct edge clicks on the
+// canvas. Selection lives here as local state so closing a modal can never
+// corrupt the graph.
 
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import GraphCanvas from '../graph/GraphCanvas.jsx';
 import PersonModal from '../components/modals/PersonModal.jsx';
 import AddPersonModal from '../components/modals/AddPersonModal.jsx';
+import AddConnectionModal from '../components/modals/AddConnectionModal.jsx';
 import ConnectionModal from '../components/modals/ConnectionModal.jsx';
 
 export default function GraphPage() {
-  // Exactly one of these drives which modal (if any) is open.
-  const [personId, setPersonId] = useState(null); // PersonModal
+  const [personId, setPersonId] = useState(null); // PersonModal (the editor)
   const [addFromId, setAddFromId] = useState(null); // AddPersonModal
-  const [edgeId, setEdgeId] = useState(null); // ConnectionModal
+  const [connectForId, setConnectForId] = useState(null); // AddConnectionModal
+  const [edgeId, setEdgeId] = useState(null); // ConnectionModal (edge click)
 
   return (
     <div className="graph-page">
@@ -25,19 +28,19 @@ export default function GraphPage() {
         <GraphCanvas onOpenPerson={setPersonId} onOpenEdge={setEdgeId} />
       </main>
 
-      {/* View/edit a person; can spawn the AddPerson flow. */}
+      {/* The tabbed node editor. Its Network tab drives the two flows below. */}
       {personId && (
         <PersonModal
           personId={personId}
           onClose={() => setPersonId(null)}
-          onAddFrom={(originId) => {
-            setPersonId(null);
-            setAddFromId(originId);
-          }}
+          onOpenPerson={setPersonId}
+          onAddConnection={setConnectForId}
+          onAddPerson={setAddFromId}
         />
       )}
 
-      {/* Add a new person branched off a node, then open its editor. */}
+      {/* Add a brand-new person branched off a node, then open its editor.
+          Rendered on top of the editor, which stays mounted underneath. */}
       {addFromId && (
         <AddPersonModal
           originId={addFromId}
@@ -49,7 +52,12 @@ export default function GraphPage() {
         />
       )}
 
-      {/* Edit both arrows of a connection. */}
+      {/* Link the node to an existing, currently-unconnected node. */}
+      {connectForId && (
+        <AddConnectionModal nodeId={connectForId} onClose={() => setConnectForId(null)} />
+      )}
+
+      {/* Edit both arrows of a connection (opened by clicking an edge). */}
       {edgeId && <ConnectionModal edgeId={edgeId} onClose={() => setEdgeId(null)} />}
     </div>
   );
