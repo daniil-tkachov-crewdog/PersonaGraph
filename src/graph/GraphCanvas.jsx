@@ -48,8 +48,9 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
         ...useGraphStore.getState().edges.map(toEdgeEl)
       ],
       minZoom: 0.2,
-      maxZoom: 3,
-      wheelSensitivity: 0.2
+      maxZoom: 4,
+      // Higher = the mouse wheel zooms in bigger steps (was a very gentle 0.2).
+      wheelSensitivity: 0.9
     });
     cyRef.current = cy;
 
@@ -122,6 +123,30 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
     return unsub;
   }, []);
 
+  // Step the zoom by a multiplicative factor, anchored at the canvas centre so
+  // the view stays put. Used by the +/- buttons.
+  const zoomBy = (factor) => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.zoom({
+      level: cy.zoom() * factor,
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+    });
+  };
+
   // The canvas fills its parent; the page controls the surrounding layout.
-  return <div ref={containerRef} className="graph-canvas" />;
+  // Zoom controls sit in the bottom-right corner of the canvas.
+  return (
+    <>
+      <div ref={containerRef} className="graph-canvas" />
+      <div className="zoom-controls">
+        <button className="zoom-btn" aria-label="Zoom in" onClick={() => zoomBy(1.25)}>
+          +
+        </button>
+        <button className="zoom-btn" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.25)}>
+          −
+        </button>
+      </div>
+    </>
+  );
 }

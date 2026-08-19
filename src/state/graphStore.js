@@ -10,7 +10,7 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
 import { DEFAULT_GROUP } from '../data/groups.js';
-import { DEFAULT_CONNECTION_TYPE, PROFILE_KEYS } from '../data/fieldTemplates.js';
+import { DEFAULT_CONNECTION_TYPE, PROFILE_DEFAULTS } from '../data/fieldTemplates.js';
 import { makeTwoWay, directedId } from '../graph/edgeModel.js';
 
 // The Admin node's id is a constant so every module can recognise "self".
@@ -47,12 +47,11 @@ export const useGraphStore = create((set, get) => ({
     const origin = get().nodes.find((n) => n.id === fromId);
     if (!origin) return null; // guard: can't branch from a node that's gone
     const id = uuid();
-    // Seed every profile field as an empty string (from the template) so form
-    // inputs stay controlled, then set the sensible non-empty defaults.
-    const blank = Object.fromEntries(PROFILE_KEYS.map((k) => [k, '']));
+    // Seed every profile field from the template (multi fields → [], single →
+    // ''), then set the sensible non-empty defaults.
     const person = {
       id,
-      ...blank,
+      ...PROFILE_DEFAULTS,
       name: 'New person',
       group: DEFAULT_GROUP,
       skills: [], // Speciality & Skills rows: { area, skill }

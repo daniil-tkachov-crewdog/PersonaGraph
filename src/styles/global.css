@@ -22,6 +22,49 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-user-select: none;
   user-select: none;
+  /* Tell the engine to render native controls (select popups, date pickers)
+     in dark mode — fixes white-on-white dropdown text. */
+  color-scheme: dark;
+}
+
+/* --- Native controls: dropdowns --------------------------------------- */
+/* Style selects to match the app and force a dark option list. */
+select {
+  color-scheme: dark;
+  appearance: none;
+  -webkit-appearance: none;
+  /* custom chevron so the control reads as part of the app, not the OS */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%237a8393' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 26px !important;
+  cursor: pointer;
+}
+select option {
+  background: #161a21;
+  color: var(--text);
+}
+
+/* --- Scrollbars (Chromium) -------------------------------------------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(43, 138, 239, 0.55);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 h1,
 h2,
@@ -645,4 +688,58 @@ h4 {
   align-items: center;
   justify-content: center;
   height: 50vh;
+}
+
+/* --- Canvas zoom controls ---------------------------------------------- */
+.zoom-controls {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.zoom-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(19, 22, 29, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  color: #c8cfd9;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.06s ease;
+}
+.zoom-btn:hover {
+  border-color: rgba(43, 138, 239, 0.6);
+  background: rgba(43, 138, 239, 0.12);
+  color: #8cc0f7;
+}
+.zoom-btn:active {
+  transform: translateY(1px);
+}
+
+/* --- Multi-value contact field ----------------------------------------- */
+.multi-field {
+  gap: 6px;
+}
+.multi-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.multi-row input {
+  flex: 1;
+}
+/* Compact "+ Add {label}" button under a multi-value field. */
+.add-mini {
+  align-self: flex-start;
+  padding: 6px 10px;
+  font-size: 12px;
 }

@@ -7,7 +7,13 @@
 
 import { useState } from 'react';
 import { useGraphStore, ADMIN_ID } from '../../state/graphStore.js';
-import { INFO_BLOCKS, CONNECTION_TYPES, blankSkill } from '../../data/fieldTemplates.js';
+import {
+  INFO_BLOCKS,
+  CONNECTION_TYPES,
+  blankSkill,
+  asList,
+  computeAge
+} from '../../data/fieldTemplates.js';
 import { GROUPS, groupLabel } from '../../data/groups.js';
 import { neighborsOf, outgoingEdge } from '../../graph/edgeModel.js';
 
@@ -96,6 +102,9 @@ export default function PersonModal({
 function InfoTab({ person, isAdmin }) {
   const updatePerson = useGraphStore((s) => s.updatePerson);
 
+  // Age auto-derived from Date of Birth when one is set.
+  const derivedAge = computeAge(person.dob);
+
   // One input row, chosen by field type.
   function renderField(field) {
     if (field.key === 'group' && isAdmin) return null;
@@ -112,6 +121,25 @@ function InfoTab({ person, isAdmin }) {
               </option>
             ))}
           </select>
+        </label>
+      );
+    }
+
+    // Contact fields hold several values — render a small add/remove list.
+    if (field.multi) return <MultiContactField key={field.key} person={person} field={field} />;
+
+    // Age: read-only (auto-calculated) when a DOB exists; editable otherwise.
+    if (field.key === 'age') {
+      const hasDob = derivedAge !== '';
+      return (
+        <label key={field.key} className="field">
+          <span>{field.label}{hasDob ? ' (from DOB)' : ''}</span>
+          <input
+            type="text"
+            value={hasDob ? derivedAge : value}
+            disabled={hasDob}
+            onChange={(e) => updatePerson(person.id, { age: e.target.value })}
+          />
         </label>
       );
     }
@@ -141,6 +169,44 @@ function InfoTab({ person, isAdmin }) {
       ))}
       <SkillsBlock person={person} />
     </>
+  );
+}
+
+// --- Multi-value contact field -------------------------------------------
+// A labelled field holding several values (e.g. two phone numbers). Legacy
+// string values are coerced to a list via asList so old graphs still edit.
+// Always shows at least one input; the last one can't be removed.
+function MultiContactField({ person, field }) {
+  const updatePerson = useGraphStore((s) => s.updatePerson);
+  const list = asList(person[field.key]);
+  const rows = list.length ? list : ['']; // keep one visible input when empty
+  const setList = (next) => updatePerson(person.id, { [field.key]: next });
+
+  return (
+    <div className="field multi-field">
+      <span>{field.label}</span>
+      {rows.map((v, i) => (
+        <div key={i} className="multi-row">
+          <input
+            type="text"
+            value={v}
+            onChange={(e) => setList(rows.map((r, idx) => (idx === i ? e.target.value : r)))}
+          />
+          {rows.length > 1 && (
+            <button
+              className="icon-btn"
+              aria-label={`Remove ${field.label}`}
+              onClick={() => setList(rows.filter((_, idx) => idx !== i))}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <button className="btn add-mini" onClick={() => setList([...rows, ''])}>
+        + Add {field.label}
+      </button>
+    </div>
   );
 }
 
