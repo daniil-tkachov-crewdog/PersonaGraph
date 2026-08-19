@@ -1,16 +1,10 @@
 // Cytoscape visual stylesheet.
 // Purely presentational: maps node/edge DATA to how they look. Kept apart from
 // GraphCanvas so the look can change without touching interaction logic.
-// Edge colour encodes connection type; the Admin node is visually distinct and
-// larger so "you" is always obvious at the centre.
+// Edge colour encodes connection closeness (see closenessColor); the Admin node
+// is visually distinct and larger so "you" is always obvious at the centre.
 
-// Connection type → edge colour. Neutral is a faint white so only Good/Bad
-// draw the eye; positive green / negative red match the redesign palette.
-const TYPE_COLORS = {
-  neutral: '#3a4150',
-  positive: '#3fb27f',
-  negative: '#e06579'
-};
+import { closenessColor } from '../data/fieldTemplates.js';
 
 export const cytoscapeStyles = [
   // --- Person nodes -------------------------------------------------------
@@ -60,8 +54,8 @@ export const cytoscapeStyles = [
     selector: 'edge',
     style: {
       width: 1.5,
-      'line-color': (e) => TYPE_COLORS[e.data('type')] || TYPE_COLORS.neutral,
-      'target-arrow-color': (e) => TYPE_COLORS[e.data('type')] || TYPE_COLORS.neutral,
+      'line-color': (e) => closenessColor(e.data('type')),
+      'target-arrow-color': (e) => closenessColor(e.data('type')),
       'target-arrow-shape': 'triangle',
       'arrow-scale': 0.9,
       'curve-style': 'bezier',

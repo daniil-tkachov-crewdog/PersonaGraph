@@ -13,6 +13,7 @@ import PersonModal from '../components/modals/PersonModal.jsx';
 import AddPersonModal from '../components/modals/AddPersonModal.jsx';
 import AddConnectionModal from '../components/modals/AddConnectionModal.jsx';
 import ConnectionModal from '../components/modals/ConnectionModal.jsx';
+import GraphModeSwitcher from '../components/GraphModeSwitcher.jsx';
 import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
 
 export default function GraphPage() {
@@ -35,6 +36,8 @@ export default function GraphPage() {
           {peopleCount} {peopleCount === 1 ? 'person' : 'people'} · {connectionCount}{' '}
           {connectionCount === 1 ? 'connection' : 'connections'}
         </div>
+        {/* Grouping mode switcher (visual only for now). */}
+        <GraphModeSwitcher />
         <GraphCanvas onOpenPerson={setPersonId} onOpenEdge={setEdgeId} />
       </main>
 

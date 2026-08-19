@@ -489,7 +489,7 @@ h4 {
 
 /* --- Tabbed node editor ------------------------------------------------- */
 .modal-lg {
-  width: 580px;
+  width: 640px;
 }
 .modal-tabs {
   display: flex;
@@ -543,7 +543,13 @@ h4 {
   margin-bottom: 9px;
 }
 
-/* Network tab rows: Name | type dropdown | remove. */
+/* Standalone "Importance to me" dropdown above the General block. */
+.importance-field {
+  margin-bottom: 4px;
+}
+
+/* Network tab rows. Default: Name | closeness | remove. The --rel variant adds
+   the "Relation to <name>" column for real people. */
 .network-list {
   margin-bottom: 14px;
 }
@@ -554,6 +560,20 @@ h4 {
   align-items: center;
   padding: 9px 0;
   border-bottom: 1px solid var(--border-soft);
+}
+.network-row--rel {
+  grid-template-columns: 1fr 128px 150px auto;
+}
+/* Column header row. */
+.network-head {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.network-head span {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
 }
 .link-name {
   background: transparent;
@@ -723,6 +743,52 @@ h4 {
 }
 .zoom-btn:active {
   transform: translateY(1px);
+}
+
+/* --- Canvas grouping-mode switcher ------------------------------------- */
+.mode-switcher {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  padding: 4px;
+  background: rgba(19, 22, 29, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+/* Sliding highlight: one slot wide, translated to the active button. */
+.mode-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / var(--count));
+  border-radius: 999px;
+  background: linear-gradient(150deg, #2b8aef, #1e63c4);
+  box-shadow: 0 3px 12px rgba(43, 138, 239, 0.35);
+  transform: translateX(calc(var(--active) * 100%));
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mode-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
+  min-width: 92px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: color 0.2s ease;
+}
+.mode-btn.active {
+  color: #fff;
 }
 
 /* --- Multi-value contact field ----------------------------------------- */

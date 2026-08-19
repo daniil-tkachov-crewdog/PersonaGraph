@@ -5,16 +5,18 @@
 // blocks inside the Info tab. Field `type` drives which input renders.
 
 // Info tab blocks. `group` renders a <select> of GROUPS; `date` a date input;
-// everything else a plain text input. `name` is treated as required.
+// `multi` fields hold several values; everything else a plain text input.
+// `name` is treated as required.
 export const INFO_BLOCKS = [
   {
     title: 'General',
     fields: [
       { key: 'name', label: 'Name', type: 'text', required: true },
-      { key: 'group', label: 'Group', type: 'group' },
+      { key: 'group', label: 'Related to me as', type: 'group' },
       { key: 'age', label: 'Age', type: 'text' },
       { key: 'dob', label: 'Date of Birth', type: 'date' },
-      { key: 'location', label: 'Location', type: 'text' },
+      { key: 'location', label: 'Country', type: 'text' },
+      { key: 'city', label: 'City/Town', type: 'text' },
       { key: 'nationality', label: 'Nationality', type: 'text' },
       { key: 'occupation', label: 'Occupation', type: 'text' },
       { key: 'familyStatus', label: 'Family status', type: 'text' },
@@ -38,12 +40,24 @@ export const INFO_BLOCKS = [
   }
 ];
 
+// "Importance to me" — a standalone dropdown shown above the General block.
+// Stored on person.importance; '' means unset.
+export const IMPORTANCE_LEVELS = [
+  { id: 'very_important', label: 'Very Important' },
+  { id: 'valuable', label: 'Valuable' },
+  { id: 'useful', label: 'Useful' },
+  { id: 'good_to_have', label: 'Good to have' },
+  { id: 'neutral', label: 'Neutral' },
+  { id: 'none', label: 'None' }
+];
+
 // Seed values for a new person's profile fields: multi fields start as an empty
 // array, single fields as an empty string, so inputs stay controlled from the
 // start and the shape matches how the editor writes them back.
-export const PROFILE_DEFAULTS = Object.fromEntries(
-  INFO_BLOCKS.flatMap((b) => b.fields).map((f) => [f.key, f.multi ? [] : ''])
-);
+export const PROFILE_DEFAULTS = {
+  ...Object.fromEntries(INFO_BLOCKS.flatMap((b) => b.fields).map((f) => [f.key, f.multi ? [] : ''])),
+  importance: '' // not part of a block; rendered above General
+};
 
 // Normalise a possibly-legacy contact value into an array of strings. Older
 // saved graphs stored contacts as a single string — coerce those so multi-value
@@ -66,17 +80,43 @@ export function computeAge(dob) {
   return age >= 0 ? String(age) : '';
 }
 
-// Connection (edge) semantics shown in the Network tab and ConnectionModal.
-// Labels are the user-facing Good/Neutral/Bad; the ids stay
-// positive/neutral/negative because cytoscapeStyles.js maps those ids to the
-// green/grey/red edge colours. "neutral" is the default for a new connection.
+// Connection closeness — the per-arrow "how close" scale shown in the Network
+// tab and the ConnectionModal. Stored as an edge's `type`. Ordered warmest →
+// coldest. "neutral" is the default for a new connection.
 export const CONNECTION_TYPES = [
-  { id: 'positive', label: 'Good' },
+  { id: 'loving', label: 'Loving' },
+  { id: 'best_friends', label: 'Best Friends' },
+  { id: 'good_friends', label: 'Good friends' },
+  { id: 'know_each_other', label: 'Know each other' },
   { id: 'neutral', label: 'Neutral' },
-  { id: 'negative', label: 'Bad' }
+  { id: 'no_talk', label: 'No-Talk' },
+  { id: 'active_hostility', label: 'Active Hostility' }
 ];
 
 export const DEFAULT_CONNECTION_TYPE = 'neutral';
+
+// Map the older three-level scale (positive/neutral/negative) onto the new
+// closeness ids so edges saved before this change still render and select
+// correctly, no migration step required.
+const LEGACY_TYPES = { positive: 'good_friends', negative: 'active_hostility' };
+export function normalizeType(type) {
+  return LEGACY_TYPES[type] || type || DEFAULT_CONNECTION_TYPE;
+}
+
+// Closeness id → edge colour (warm green → grey → red), used by the canvas and
+// the sidebar status dots. Legacy ids resolve via normalizeType first.
+const RELATION_COLORS = {
+  loving: '#e069a6',
+  best_friends: '#3fb27f',
+  good_friends: '#6cc08f',
+  know_each_other: '#7f8aa0',
+  neutral: '#6b7280',
+  no_talk: '#d0894f',
+  active_hostility: '#e06579'
+};
+export function closenessColor(type) {
+  return RELATION_COLORS[normalizeType(type)] || RELATION_COLORS.neutral;
+}
 
 // A blank skill row for the "Speciality & Skills" block. Each person holds a
 // `skills` array of { area, skill }.

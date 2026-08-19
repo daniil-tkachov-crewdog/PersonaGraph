@@ -25,7 +25,9 @@ export const colaOptions = {
   animate: true,
   infinite: true,
   fit: false,
-  edgeLength: 120,
+  // Matches the clique layout's polygon side (cliqueLayout EDGE_LEN) so the
+  // simulation relaxes toward — rather than fights — the seeded regular n-gons.
+  edgeLength: 150,
   nodeSpacing: 12,
   // Respect per-node locks (see pinAdmin) so the Admin never drifts.
   handleDisconnected: true

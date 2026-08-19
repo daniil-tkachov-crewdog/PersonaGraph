@@ -9,7 +9,9 @@ import { useState } from 'react';
 import { useGraphStore, ADMIN_ID } from '../../state/graphStore.js';
 import {
   INFO_BLOCKS,
+  IMPORTANCE_LEVELS,
   CONNECTION_TYPES,
+  normalizeType,
   blankSkill,
   asList,
   computeAge
@@ -81,6 +83,7 @@ export default function PersonModal({
           {tab === 'Network' && (
             <NetworkTab
               person={person}
+              isAdmin={isAdmin}
               onOpenPerson={onOpenPerson}
               onAddConnection={onAddConnection}
               onAddPerson={onAddPerson}
@@ -161,6 +164,22 @@ function InfoTab({ person, isAdmin }) {
 
   return (
     <>
+      {/* Importance to me — a standalone dropdown above the General block. */}
+      <label className="field importance-field">
+        <span>Importance to me</span>
+        <select
+          value={person.importance ?? ''}
+          onChange={(e) => updatePerson(person.id, { importance: e.target.value })}
+        >
+          <option value="">—</option>
+          {IMPORTANCE_LEVELS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       {INFO_BLOCKS.map((block) => (
         <section key={block.title} className="info-block">
           <h3 className="block-title">{block.title}</h3>
@@ -260,31 +279,50 @@ function SkillsBlock({ person }) {
 }
 
 // --- Network tab ---------------------------------------------------------
-// Lists this node's connections (Name | outgoing-type dropdown | remove) and
-// offers Add Connection (existing nodes) and Add new person (a fresh node).
-function NetworkTab({ person, onOpenPerson, onAddConnection, onAddPerson }) {
+// Lists this node's connections. Columns per row:
+//   Name | Closeness (this node's outgoing arrow) | Relation to <this person>
+//   (the other person's category toward this one — hidden for the Admin) | ✕
+// Plus Add Connection (existing nodes) and Add new person (a fresh node).
+function NetworkTab({ person, isAdmin, onOpenPerson, onAddConnection, onAddPerson }) {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const setEdgeType = useGraphStore((s) => s.setEdgeType);
+  const updateEdge = useGraphStore((s) => s.updateEdge);
   const disconnect = useGraphStore((s) => s.disconnect);
 
   const neighborIds = neighborsOf(edges, person.id);
   const nameOf = (id) => nodes.find((n) => n.id === id)?.name || 'Unknown';
+  // The extra "Relation to <name>" column is only shown for real people.
+  const showRelation = !isAdmin;
+  const rowClass = `network-row ${showRelation ? 'network-row--rel' : ''}`;
 
   return (
     <>
       <div className="network-list">
         {neighborIds.length === 0 && <p className="muted">No connections yet.</p>}
+
+        {neighborIds.length > 0 && (
+          <div className={`${rowClass} network-head`}>
+            <span>Connection</span>
+            <span>Closeness</span>
+            {showRelation && <span>Relation to {person.name || 'this person'}</span>}
+            <span />
+          </div>
+        )}
+
         {neighborIds.map((otherId) => {
-          // The dropdown edits THIS node's outgoing arrow only.
+          // Closeness edits THIS node's outgoing arrow (person → other).
           const out = outgoingEdge(edges, person.id, otherId);
+          // "Relation to <person>" edits how the OTHER relates back (other →
+          // person): the category stored on that incoming arrow.
+          const inc = outgoingEdge(edges, otherId, person.id);
           return (
-            <div key={otherId} className="network-row">
+            <div key={otherId} className={rowClass}>
               <button className="link-name" onClick={() => onOpenPerson(otherId)}>
                 {nameOf(otherId)}
               </button>
               <select
-                value={out?.type ?? 'neutral'}
+                value={normalizeType(out?.type)}
                 disabled={!out}
                 onChange={(e) => out && setEdgeType(out.id, e.target.value)}
               >
@@ -294,6 +332,20 @@ function NetworkTab({ person, onOpenPerson, onAddConnection, onAddPerson }) {
                   </option>
                 ))}
               </select>
+              {showRelation && (
+                <select
+                  value={inc?.relation ?? ''}
+                  disabled={!inc}
+                  onChange={(e) => inc && updateEdge(inc.id, { relation: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {GROUPS.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 className="icon-btn"
                 aria-label="Remove connection"

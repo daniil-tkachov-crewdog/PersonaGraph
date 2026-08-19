@@ -8,6 +8,7 @@
 import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
 import { groupConnections } from '../state/grouping.js';
 import { outgoingEdge } from '../graph/edgeModel.js';
+import { closenessColor } from '../data/fieldTemplates.js';
 
 // Up to two leading letters, uppercased, for the avatar chip.
 function initials(name) {
@@ -15,10 +16,6 @@ function initials(name) {
   if (parts.length === 0) return '?';
   return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
 }
-
-// Connection type → dot colour (matches the edge palette). Grey when there is
-// no direct Admin→person arrow to read a sentiment from.
-const DOT_COLORS = { positive: '#3fb27f', negative: '#e06579', neutral: '#6b7280' };
 
 export default function AllConnections({ onOpenPerson }) {
   const nodes = useGraphStore((s) => s.nodes);
@@ -30,8 +27,9 @@ export default function AllConnections({ onOpenPerson }) {
     return <p className="muted sidebar-empty">No connections yet. Open a node to add one.</p>;
   }
 
-  // Resolve the status-dot colour for one person from the Admin's outgoing arrow.
-  const dotColor = (id) => DOT_COLORS[outgoingEdge(edges, ADMIN_ID, id)?.type] || DOT_COLORS.neutral;
+  // Resolve the status-dot colour for one person from the Admin's outgoing
+  // arrow (its closeness). Grey when there is no direct Admin→person arrow.
+  const dotColor = (id) => closenessColor(outgoingEdge(edges, ADMIN_ID, id)?.type);
 
   return (
     <div className="connections">

@@ -88,12 +88,15 @@ export const useGraphStore = create((set, get) => ({
     }));
   },
 
-  // Change the type of ONE directed edge (one arrow of a connection). The two
-  // directions are edited independently, matching the two-arrow model.
-  setEdgeType: (edgeId, type) =>
+  // Patch arbitrary attributes of ONE directed edge (its `type` closeness and/or
+  // its `relation` category). Directions are edited independently.
+  updateEdge: (edgeId, patch) =>
     set((s) => ({
-      edges: s.edges.map((e) => (e.id === edgeId ? { ...e, type } : e))
+      edges: s.edges.map((e) => (e.id === edgeId ? { ...e, ...patch } : e))
     })),
+
+  // Convenience: set just the closeness type of one directed edge.
+  setEdgeType: (edgeId, type) => get().updateEdge(edgeId, { type }),
 
   // Add a connection between two EXISTING nodes that aren't linked yet. Skips
   // any direction that already exists so we never create duplicate arrows.

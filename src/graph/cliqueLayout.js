@@ -77,11 +77,19 @@ function buildClusters(peopleIds, adj) {
   return clusters;
 }
 
-// Radius of a ring holding `n` nodes, scaled so members never crowd together.
+// Fixed distance between ADJACENT nodes on a ring (the polygon's side length).
+// Holding this constant for every n is the whole point: a ring of n mutually
+// connected nodes becomes a regular n-gon whose side is always EDGE_LEN, so the
+// diagonals fall out at their exact ratios (square → a√2, pentagon → a·φ, …).
+export const EDGE_LEN = 150;
+
+// Circumradius of a regular n-gon with side EDGE_LEN: side = 2R·sin(π/n) ⇒
+// R = side / (2·sin(π/n)). Bigger groups therefore get bigger circles while
+// neighbouring nodes stay exactly EDGE_LEN apart.
 function ringRadius(n) {
   if (n <= 1) return 0;
-  const spacing = 66; // desired arc length between adjacent nodes
-  return Math.max(95, (spacing * n) / (2 * Math.PI));
+  if (n === 2) return EDGE_LEN / 2; // two nodes = a line segment of length EDGE_LEN
+  return EDGE_LEN / (2 * Math.sin(Math.PI / n));
 }
 
 // Place `ids` evenly on a circle of radius `r` centred at `c`; a lone id sits at
