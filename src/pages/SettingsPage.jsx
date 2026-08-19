@@ -1,8 +1,7 @@
-// SettingsPage — three tabs: General, Sync, Connection.
-// Only the Sync tab is functional in v1.0 (choosing the folder graphs save
-// into); General and Connection are placeholders marked "coming soon" so the
-// intended shape of the product is visible without promising behaviour that
-// isn't wired up. A back button returns to the graph.
+// SettingsPage — tabs: General, Sync, Connection, Graph Formula.
+// Sync (choose the save folder) and Graph Formula (live geometry controls) are
+// functional; General and Connection remain "coming soon". A back button
+// returns to the graph.
 
 import { useState } from 'react';
 import { useSettingsStore } from '../state/settingsStore.js';
@@ -13,6 +12,72 @@ function ComingSoonRow({ label }) {
     <div className="setting-row">
       <span>{label}</span>
       <span className="soon">coming soon</span>
+    </div>
+  );
+}
+
+// The tunable geometry knobs, described as data so the tab renders itself.
+const FORMULA_CONTROLS = [
+  { key: 'edgeLength', label: 'Edge length (polygon side)', min: 60, max: 400, step: 5, unit: 'px' },
+  { key: 'nodeSpacing', label: 'Node spacing', min: 0, max: 80, step: 2, unit: 'px' },
+  { key: 'clusterGap', label: 'Gap between clusters', min: 0, max: 320, step: 10, unit: 'px' },
+  { key: 'groupRingRadius', label: 'Group ring radius', min: 150, max: 640, step: 10, unit: 'px' },
+  { key: 'bubbleSize', label: 'Group bubble size', min: 50, max: 220, step: 4, unit: 'px' },
+  { key: 'expandMs', label: 'Expand animation', min: 100, max: 1200, step: 20, unit: 'ms' }
+];
+
+// Graph Formula tab: live-editable geometry. Every change writes straight to the
+// settings store, and the canvas re-renders immediately.
+function FormulaTab() {
+  const formula = useSettingsStore((s) => s.formula);
+  const setFormula = useSettingsStore((s) => s.setFormula);
+  const resetFormula = useSettingsStore((s) => s.resetFormula);
+
+  return (
+    <div className="formula-tab">
+      <p className="muted formula-intro">
+        Tune how the graph is drawn. Changes apply live. If a dense group looks
+        messy, raise the edge length and cluster gap, or turn physics off for a
+        fixed geometric layout.
+      </p>
+
+      {FORMULA_CONTROLS.map((c) => (
+        <div className="formula-row" key={c.key}>
+          <label htmlFor={`f-${c.key}`}>{c.label}</label>
+          <input
+            id={`f-${c.key}`}
+            type="range"
+            min={c.min}
+            max={c.max}
+            step={c.step}
+            value={formula[c.key]}
+            onChange={(e) => setFormula({ [c.key]: Number(e.target.value) })}
+          />
+          <span className="formula-value">
+            {formula[c.key]}
+            {c.unit}
+          </span>
+        </div>
+      ))}
+
+      {/* Physics on/off toggle for the ungrouped ("None") view. */}
+      <div className="formula-row">
+        <label htmlFor="f-physics">Live physics (None mode)</label>
+        <label className="switch">
+          <input
+            id="f-physics"
+            type="checkbox"
+            checked={formula.physics}
+            onChange={(e) => setFormula({ physics: e.target.checked })}
+          />
+          <span className="switch-track" />
+        </label>
+        <span className="formula-value">{formula.physics ? 'On' : 'Off'}</span>
+      </div>
+
+      <button className="btn" onClick={resetFormula} style={{ marginTop: 16 }}>
+        Reset to defaults
+      </button>
     </div>
   );
 }
@@ -44,7 +109,8 @@ export default function SettingsPage() {
         {[
           ['general', 'General'],
           ['sync', 'Sync'],
-          ['connection', 'Connection']
+          ['connection', 'Connection'],
+          ['formula', 'Graph Formula']
         ].map(([id, label]) => (
           <button
             key={id}
@@ -84,6 +150,8 @@ export default function SettingsPage() {
             <p className="muted">Connect your Telegram to import contacts and chats.</p>
           </div>
         )}
+
+        {tab === 'formula' && <FormulaTab />}
       </div>
     </div>
   );

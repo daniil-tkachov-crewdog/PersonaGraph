@@ -1,12 +1,26 @@
 // Settings store (Zustand) with lightweight localStorage persistence.
 // Holds cross-cutting UI/app settings that must survive reloads: the active
-// top-level view (graph/settings/account), the sidebar folded state, and the
-// chosen sync folder. Persistence is hand-rolled (not zustand/middleware) to
-// keep the dependency surface small and the behaviour obvious.
+// top-level view, the sidebar folded state, the chosen sync folder, the active
+// graph grouping mode, and the editable "Graph Formula" (geometry knobs).
+// Persistence is hand-rolled (not zustand/middleware) to keep the dependency
+// surface small and the behaviour obvious.
 
 import { create } from 'zustand';
 
 const STORAGE_KEY = 'personagraph.settings';
+
+// Default geometry parameters for the graph layout. Every layout constant the
+// user might want to tune lives here so the Settings → Graph Formula tab can
+// drive the canvas. Units are canvas pixels unless noted.
+export const DEFAULT_FORMULA = {
+  edgeLength: 150, // polygon side / spring length between adjacent nodes
+  nodeSpacing: 12, // extra repulsion padding between nodes
+  clusterGap: 90, // gap between separate clique circles
+  groupRingRadius: 340, // radius of the ring that grouped bubbles sit on
+  bubbleSize: 96, // collapsed group-bubble diameter
+  physics: true, // run the live force simulation in "None" mode
+  expandMs: 420 // group expand/reveal animation duration (ms)
+};
 
 // Load persisted settings once at startup. Wrapped in try/catch because
 // localStorage can be unavailable or hold corrupt JSON — we fall back to
@@ -27,11 +41,19 @@ export const useSettingsStore = create((set, get) => ({
   // should always open on the graph.
   view: 'graph',
 
-  // Sidebar fold state and the sync folder ARE persisted (see persist() below).
+  // Active graph grouping mode: 'none' | 'country' | 'city' | 'relation' |
+  // 'importance'. Not persisted — always start ungrouped.
+  graphMode: 'none',
+
+  // Sidebar fold, sync folder, and the graph formula ARE persisted.
   sidebarFolded: persisted.sidebarFolded ?? false,
   syncFolder: persisted.syncFolder ?? null,
+  // Merge persisted formula over defaults so new keys appear for old users.
+  formula: { ...DEFAULT_FORMULA, ...(persisted.formula || {}) },
 
   setView: (view) => set({ view }),
+
+  setGraphMode: (graphMode) => set({ graphMode }),
 
   toggleSidebar: () =>
     set((s) => {
@@ -43,6 +65,20 @@ export const useSettingsStore = create((set, get) => ({
   setSyncFolder: (folder) => {
     persist({ ...get(), syncFolder: folder });
     set({ syncFolder: folder });
+  },
+
+  // Patch one or more formula fields and persist.
+  setFormula: (patch) => {
+    const formula = { ...get().formula, ...patch };
+    persist({ ...get(), formula });
+    set({ formula });
+  },
+
+  // Restore all geometry knobs to their defaults.
+  resetFormula: () => {
+    const formula = { ...DEFAULT_FORMULA };
+    persist({ ...get(), formula });
+    set({ formula });
   }
 }));
 
@@ -54,7 +90,8 @@ function persist(state) {
       STORAGE_KEY,
       JSON.stringify({
         sidebarFolded: state.sidebarFolded,
-        syncFolder: state.syncFolder
+        syncFolder: state.syncFolder,
+        formula: state.formula
       })
     );
   } catch {

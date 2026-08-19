@@ -1,32 +1,36 @@
 // GraphModeSwitcher — the centered pill switcher at the top of the canvas.
-// Four modes (Country / City / Relation / Importance) that WILL group the graph
-// by that attribute. For now it is purely visual: it tracks the selected mode
-// locally and animates a sliding highlight, but does not change the layout yet.
-// The animated "thumb" is driven by CSS custom properties (--count / --active)
-// so switching slides smoothly between buttons.
+// Picks how the graph is grouped: None (raw clique layout) or by a person
+// attribute (Country / City / Relation / Importance). The chosen mode lives in
+// the settings store so GraphCanvas can react to it. An animated "thumb" slides
+// between buttons, driven by CSS custom properties (--count / --active).
 
-import { useState } from 'react';
+import { useSettingsStore } from '../state/settingsStore.js';
 
-const MODES = ['Country', 'City', 'Relation', 'Importance'];
+// [button label, mode id]. "None" sits leftmost and means "don't group".
+const MODES = [
+  ['None', 'none'],
+  ['Country', 'country'],
+  ['City', 'city'],
+  ['Relation', 'relation'],
+  ['Importance', 'importance']
+];
 
 export default function GraphModeSwitcher() {
-  const [active, setActive] = useState(0);
+  const graphMode = useSettingsStore((s) => s.graphMode);
+  const setGraphMode = useSettingsStore((s) => s.setGraphMode);
+  const active = Math.max(0, MODES.findIndex(([, id]) => id === graphMode));
 
   return (
-    <div
-      className="mode-switcher"
-      style={{ '--count': MODES.length, '--active': active }}
-    >
-      {/* The sliding highlight; its width is 1/count and it translates by the
-          active index, animated via CSS transition. */}
+    <div className="mode-switcher" style={{ '--count': MODES.length, '--active': active }}>
+      {/* Sliding highlight; width is 1/count, translated to the active button. */}
       <div className="mode-thumb" />
-      {MODES.map((m, i) => (
+      {MODES.map(([label, id]) => (
         <button
-          key={m}
-          className={`mode-btn ${i === active ? 'active' : ''}`}
-          onClick={() => setActive(i)}
+          key={id}
+          className={`mode-btn ${id === graphMode ? 'active' : ''}`}
+          onClick={() => setGraphMode(id)}
         >
-          {m}
+          {label}
         </button>
       ))}
     </div>

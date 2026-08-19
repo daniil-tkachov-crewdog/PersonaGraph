@@ -68,8 +68,14 @@ src/
   metadata (saved-at time) as JSON into the folder chosen in Settings → Sync.
   Filename: `PG_[admin_name]_[dd-mm-yy]_[HH-MM].json`.
 - **Upload Graph** — pick a saved file to rebuild the whole graph.
-- **Settings** — *Sync* (choose the save folder) works today; *General* (dark/
-  light, font size) and *Connection* (Telegram) are marked **coming soon**.
+- **Group the graph** — a top-of-canvas switcher (None / Country / City /
+  Relation / Importance). Grouping folds everyone with the same value into one
+  bubble; click a bubble to expand it (it grows and reveals its members,
+  connected as usual) and click the faint backdrop to collapse.
+- **Settings** — *Sync* (choose the save folder) and *Graph Formula* (live
+  geometry knobs: edge length, cluster gap, ring radius, bubble size, physics
+  on/off, …) work today; *General* (dark/light, font size) and *Connection*
+  (Telegram) are marked **coming soon**.
 - **Account** — **coming soon**.
 
 ---

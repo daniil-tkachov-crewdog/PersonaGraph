@@ -77,19 +77,21 @@ function buildClusters(peopleIds, adj) {
   return clusters;
 }
 
-// Fixed distance between ADJACENT nodes on a ring (the polygon's side length).
+// Fallback distance between ADJACENT nodes on a ring (the polygon's side).
 // Holding this constant for every n is the whole point: a ring of n mutually
-// connected nodes becomes a regular n-gon whose side is always EDGE_LEN, so the
-// diagonals fall out at their exact ratios (square → a√2, pentagon → a·φ, …).
+// connected nodes becomes a regular n-gon whose side is always the edge length,
+// so the diagonals fall out at their exact ratios (square → a√2, pentagon →
+// a·φ, …). The Graph Formula setting overrides this per call.
 export const EDGE_LEN = 150;
 
-// Circumradius of a regular n-gon with side EDGE_LEN: side = 2R·sin(π/n) ⇒
+// Circumradius of a regular n-gon with side `edgeLen`: side = 2R·sin(π/n) ⇒
 // R = side / (2·sin(π/n)). Bigger groups therefore get bigger circles while
-// neighbouring nodes stay exactly EDGE_LEN apart.
-function ringRadius(n) {
+// neighbouring nodes stay exactly `edgeLen` apart. Exported so the grouped view
+// can place revealed members with the same geometry.
+export function ringRadius(n, edgeLen = EDGE_LEN) {
   if (n <= 1) return 0;
-  if (n === 2) return EDGE_LEN / 2; // two nodes = a line segment of length EDGE_LEN
-  return EDGE_LEN / (2 * Math.sin(Math.PI / n));
+  if (n === 2) return edgeLen / 2; // two nodes = a line segment of length edgeLen
+  return edgeLen / (2 * Math.sin(Math.PI / n));
 }
 
 // Place `ids` evenly on a circle of radius `r` centred at `c`; a lone id sits at
@@ -111,7 +113,7 @@ function placeRing(out, ids, c, r) {
 // - many clusters → each cluster sits at its own angle on a big ring around the
 //   centre, members arranged on a small circle there.
 // Returns Map<id, {x, y}>.
-export function computeSeedPositions({ nodes, edges, adminId, center }) {
+export function computeSeedPositions({ nodes, edges, adminId, center, edgeLen = EDGE_LEN, clusterGap = 80 }) {
   const peopleIds = nodes.map((n) => n.id).filter((id) => id !== adminId);
   const out = new Map();
   if (peopleIds.length === 0) return out;
@@ -128,19 +130,19 @@ export function computeSeedPositions({ nodes, edges, adminId, center }) {
   const clusters = buildClusters(peopleIds, adj);
 
   if (clusters.length === 1) {
-    placeRing(out, clusters[0], center, ringRadius(clusters[0].length));
+    placeRing(out, clusters[0], center, ringRadius(clusters[0].length, edgeLen));
     return out;
   }
 
   // Spread cluster centres on a big ring; size it so neighbouring cluster
   // circles don't overlap.
-  const maxR = Math.max(...clusters.map((c) => ringRadius(c.length)));
-  const bigR = Math.max(260, maxR * 2 + 80);
+  const maxR = Math.max(...clusters.map((c) => ringRadius(c.length, edgeLen)));
+  const bigR = Math.max(260, maxR * 2 + clusterGap);
   const step = (2 * Math.PI) / clusters.length;
   clusters.forEach((cluster, k) => {
     const a = k * step - Math.PI / 2;
     const cc = { x: center.x + bigR * Math.cos(a), y: center.y + bigR * Math.sin(a) };
-    placeRing(out, cluster, cc, ringRadius(cluster.length));
+    placeRing(out, cluster, cc, ringRadius(cluster.length, edgeLen));
   });
   return out;
 }

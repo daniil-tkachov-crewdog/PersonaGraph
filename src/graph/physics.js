@@ -16,22 +16,25 @@ export function registerPhysics() {
   registered = true;
 }
 
-// Cola options tuned for interactive editing:
-// - infinite: keep the simulation alive so drags propagate continuously;
-// - fit:false so the viewport doesn't jump every tick;
-// - edgeLength gives a comfortable spacing between connected people.
-export const colaOptions = {
-  name: 'cola',
-  animate: true,
-  infinite: true,
-  fit: false,
-  // Matches the clique layout's polygon side (cliqueLayout EDGE_LEN) so the
-  // simulation relaxes toward — rather than fights — the seeded regular n-gons.
-  edgeLength: 150,
-  nodeSpacing: 12,
-  // Respect per-node locks (see pinAdmin) so the Admin never drifts.
-  handleDisconnected: true
-};
+// Build cola options from the current Graph Formula. Tuned for interactive
+// editing: infinite keeps the simulation alive so drags propagate; fit:false
+// stops the viewport jumping; edgeLength is matched to the clique polygon side
+// so the simulation relaxes toward — rather than fights — the seeded n-gons.
+export function buildColaOptions(formula = {}) {
+  return {
+    name: 'cola',
+    animate: true,
+    infinite: true,
+    fit: false,
+    edgeLength: formula.edgeLength ?? 150,
+    nodeSpacing: formula.nodeSpacing ?? 12,
+    // Respect per-node locks (see pinAdmin) so the Admin never drifts.
+    handleDisconnected: true
+  };
+}
+
+// Back-compat default options (used where no formula is available).
+export const colaOptions = buildColaOptions();
 
 // Pin the Admin node to the centre of the current viewport and lock it so
 // neither the user nor the simulation can move it. Called after the graph and

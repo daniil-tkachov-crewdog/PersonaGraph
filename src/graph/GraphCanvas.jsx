@@ -1,31 +1,35 @@
-// GraphCanvas — the interactive Obsidian-style graph surface.
-// Responsibilities, and nothing more:
-//   1. mount a Cytoscape instance into a div;
-//   2. keep that instance in sync with the Zustand graph store (add/remove/
-//      relabel nodes and edges as the store changes) WITHOUT resetting the
-//      running physics or node positions;
-//   3. translate canvas interactions into intent callbacks (open a person,
-//      open an edge) that the parent turns into modals.
-// All look lives in cytoscapeStyles.js and all physics in physics.js.
+// GraphCanvas — the interactive graph surface, in two modes.
+//
+// "none" mode (default): the Obsidian-style force graph. Every store node/edge
+// is drawn, laid out as clique circles (see cliqueLayout) and refined by the
+// cola physics. Positions are preserved across edits via incremental diffing.
+//
+// grouping modes (country / city / relation / importance): people are bucketed
+// by one attribute (see groupLayout) and each bucket is drawn as a single
+// collapsible BUBBLE around the Admin. Clicking a bubble expands it — the circle
+// grows and reveals the hidden member nodes, connected as usual; clicking the
+// faint expanded backdrop collapses it again. Physics is off here so the grouped
+// view stays clean and deterministic.
+//
+// Look lives in cytoscapeStyles.js; geometry constants come from the Graph
+// Formula settings so the user can tune the layout.
 
 import { useEffect, useRef } from 'react';
 import cytoscape from 'cytoscape';
 import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
+import { useSettingsStore } from '../state/settingsStore.js';
 import { cytoscapeStyles } from './cytoscapeStyles.js';
-import { registerPhysics, colaOptions, pinAdmin } from './physics.js';
-import { computeSeedPositions } from './cliqueLayout.js';
+import { registerPhysics, buildColaOptions, pinAdmin } from './physics.js';
+import { computeSeedPositions, ringRadius } from './cliqueLayout.js';
+import { groupPeople } from './groupLayout.js';
 
 // A signature of the graph's STRUCTURE (which nodes/edges exist), ignoring
-// labels/types. Used to re-seed the circular layout only when the shape
-// actually changes — not on every profile edit.
+// labels/types — used to re-seed the circle layout only when the shape changes.
 function structureSignature(nodes, edges) {
-  const ns = nodes.map((n) => n.id).sort().join(',');
-  const es = edges.map((e) => e.id).sort().join(',');
-  return `${ns}|${es}`;
+  return `${nodes.map((n) => n.id).sort().join(',')}|${edges.map((e) => e.id).sort().join(',')}`;
 }
 
-// Map a store node to a Cytoscape element. The Admin gets a class so the
-// stylesheet can single it out; `label` is what the canvas prints.
+// Store node → Cytoscape element (used for the Admin and real people).
 function toNodeEl(n) {
   return {
     group: 'nodes',
@@ -34,154 +38,242 @@ function toNodeEl(n) {
   };
 }
 
-// Map a store edge (already directed) to a Cytoscape element.
+// Store edge (already directed) → Cytoscape element.
 function toEdgeEl(e) {
-  return {
-    group: 'edges',
-    data: { id: e.id, source: e.source, target: e.target, type: e.type }
-  };
+  return { group: 'edges', data: { id: e.id, source: e.source, target: e.target, type: e.type } };
 }
 
 export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
-  const layoutRef = useRef(null); // the running cola layout (stopped before re-run)
-  const sigRef = useRef(''); // last structure signature we seeded for
+  const layoutRef = useRef(null); // running cola layout (stopped before re-run)
+  const sigRef = useRef(''); // last structure signature seeded (none mode)
+  const modeRef = useRef('none'); // current grouping mode
+  const expandedRef = useRef(new Set()); // group keys currently expanded
+  const formulaRef = useRef(useSettingsStore.getState().formula);
 
-  // Position every non-Admin node on its clique circle, then pin the Admin at
-  // the centre. Called on mount and whenever the graph's structure changes, so
-  // dense groups start (and stay) as clean n-gons instead of a hairball.
-  const seedCircles = (cy) => {
-    const { nodes, edges } = useGraphStore.getState();
-    const center = { x: cy.width() / 2, y: cy.height() / 2 };
-    const pos = computeSeedPositions({ nodes, edges, adminId: ADMIN_ID, center });
-    cy.batch(() => {
-      for (const [id, p] of pos) {
-        const el = cy.getElementById(id);
-        if (!el.empty()) el.position(p);
-      }
-    });
-    pinAdmin(cy, ADMIN_ID);
-  };
-
-  // Stop any running layout, then start a fresh cola run from current positions.
-  const runPhysics = (cy) => {
-    layoutRef.current?.stop();
-    layoutRef.current = cy.layout(colaOptions);
-    layoutRef.current.run();
-  };
-
-  // --- Mount / unmount the Cytoscape instance (once) ----------------------
   useEffect(() => {
     registerPhysics();
     const cy = cytoscape({
       container: containerRef.current,
       style: cytoscapeStyles,
-      // Seed with whatever the store holds at mount time.
-      elements: [
-        ...useGraphStore.getState().nodes.map(toNodeEl),
-        ...useGraphStore.getState().edges.map(toEdgeEl)
-      ],
-      minZoom: 0.2,
+      elements: [],
+      minZoom: 0.15,
       maxZoom: 4,
-      // Higher = the mouse wheel zooms in bigger steps (was a very gentle 0.2).
       wheelSensitivity: 0.9
     });
     cyRef.current = cy;
 
-    // Lay the initial graph out as clique circles, remember its signature, then
-    // start the continuous physics that refines and holds the shape.
-    const s = useGraphStore.getState();
-    seedCircles(cy);
-    sigRef.current = structureSignature(s.nodes, s.edges);
-    runPhysics(cy);
-    // Re-centre the Admin if the window (and thus the canvas) is resized.
-    const onResize = () => pinAdmin(cy, ADMIN_ID);
+    const center = () => ({ x: cy.width() / 2, y: cy.height() / 2 });
+
+    // --- none mode: seed clique circles, then run physics -----------------
+    const seedCircles = () => {
+      const { nodes, edges } = useGraphStore.getState();
+      const f = formulaRef.current;
+      const pos = computeSeedPositions({
+        nodes,
+        edges,
+        adminId: ADMIN_ID,
+        center: center(),
+        edgeLen: f.edgeLength,
+        clusterGap: f.clusterGap
+      });
+      cy.batch(() => {
+        for (const [id, p] of pos) {
+          const el = cy.getElementById(id);
+          if (!el.empty()) el.position(p);
+        }
+      });
+      pinAdmin(cy, ADMIN_ID);
+    };
+
+    const runPhysics = () => {
+      layoutRef.current?.stop();
+      layoutRef.current = null;
+      if (!formulaRef.current.physics) {
+        pinAdmin(cy, ADMIN_ID);
+        return;
+      }
+      layoutRef.current = cy.layout(buildColaOptions(formulaRef.current));
+      layoutRef.current.run();
+    };
+
+    // Full rebuild of the ungrouped graph from the store.
+    const renderNone = () => {
+      layoutRef.current?.stop();
+      const { nodes, edges } = useGraphStore.getState();
+      cy.elements().remove();
+      cy.add([...nodes.map(toNodeEl), ...edges.map(toEdgeEl)]);
+      seedCircles();
+      sigRef.current = structureSignature(nodes, edges);
+      runPhysics();
+    };
+
+    // --- grouping modes: bubbles around the Admin, expandable -------------
+    const renderGrouped = (animateKey = null) => {
+      layoutRef.current?.stop();
+      layoutRef.current = null;
+      const { nodes, edges, adminName } = useGraphStore.getState();
+      const f = formulaRef.current;
+      const groups = groupPeople(nodes, modeRef.current);
+      const c = center();
+      const K = groups.length;
+      const slotR = K === 0 ? 0 : f.groupRingRadius;
+
+      cy.elements().remove();
+      cy.add({ group: 'nodes', data: { id: ADMIN_ID, label: adminName || 'Me' }, classes: 'admin' });
+
+      const visible = new Set([ADMIN_ID]);
+      const revealed = []; // {id, slot, target} for the group being expanded
+
+      groups.forEach((g, i) => {
+        const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(1, K);
+        const slot =
+          K <= 1
+            ? { x: c.x, y: c.y - slotR }
+            : { x: c.x + slotR * Math.cos(a), y: c.y + slotR * Math.sin(a) };
+
+        if (expandedRef.current.has(g.key)) {
+          // Faint expanded backdrop (also the click target to collapse).
+          const r = ringRadius(g.ids.length, f.edgeLength);
+          const backdrop = 2 * r + 90;
+          cy.add({
+            group: 'nodes',
+            data: { id: `grp:${g.key}`, label: `${g.label} · ${g.ids.length}`, diam: backdrop, groupKey: g.key },
+            classes: 'group expanded'
+          });
+          cy.getElementById(`grp:${g.key}`).position(slot).ungrabify();
+          // Member nodes on a circle inside the backdrop.
+          g.ids.forEach((id, j) => {
+            const t = -Math.PI / 2 + (2 * Math.PI * j) / g.ids.length;
+            const target = g.ids.length === 1 ? slot : { x: slot.x + r * Math.cos(t), y: slot.y + r * Math.sin(t) };
+            const node = nodes.find((n) => n.id === id);
+            cy.add(toNodeEl(node));
+            cy.getElementById(id).position(target);
+            visible.add(id);
+            if (g.key === animateKey) revealed.push({ id, slot, target });
+          });
+        } else {
+          // Collapsed bubble: one disc for the whole bucket.
+          const diam = f.bubbleSize + Math.min(80, g.ids.length * 6);
+          cy.add({
+            group: 'nodes',
+            data: { id: `grp:${g.key}`, label: `${g.label}\n${g.ids.length}`, diam, groupKey: g.key },
+            classes: 'group'
+          });
+          cy.getElementById(`grp:${g.key}`).position(slot).ungrabify();
+        }
+      });
+
+      cy.getElementById(ADMIN_ID).position(c).ungrabify();
+      // Edges only between two currently-visible real nodes (keeps it clean).
+      for (const e of edges) {
+        if (visible.has(e.source) && visible.has(e.target)) cy.add(toEdgeEl(e));
+      }
+      pinAdmin(cy, ADMIN_ID);
+
+      // Reveal animation: members grow out from the bubble's centre.
+      if (revealed.length) {
+        for (const { id, slot, target } of revealed) {
+          const el = cy.getElementById(id);
+          el.position(slot);
+          el.style('opacity', 0);
+          el.animate({ position: target, style: { opacity: 1 } }, { duration: f.expandMs, easing: 'ease-out' });
+        }
+      }
+    };
+
+    // Toggle a group's expanded state (from a bubble tap).
+    const toggleGroup = (key) => {
+      if (expandedRef.current.has(key)) {
+        expandedRef.current.delete(key);
+        renderGrouped(); // collapse instantly
+      } else {
+        expandedRef.current.add(key);
+        renderGrouped(key); // expand with reveal animation
+      }
+    };
+
+    // --- Initial render ----------------------------------------------------
+    const settings = useSettingsStore.getState();
+    modeRef.current = settings.graphMode;
+    formulaRef.current = settings.formula;
+    if (modeRef.current === 'none') renderNone();
+    else renderGrouped();
+
+    // --- Interaction wiring (bound once; survives element rebuilds) --------
+    cy.on('tap', 'node', (evt) => {
+      const el = evt.target;
+      if (el.hasClass('group')) toggleGroup(el.data('groupKey'));
+      else onOpenPerson(el.id());
+    });
+    cy.on('tap', 'edge', (evt) => onOpenEdge(evt.target.id()));
+    const onResize = () => (modeRef.current === 'none' ? pinAdmin(cy, ADMIN_ID) : renderGrouped());
     cy.on('resize', onResize);
 
-    // Interaction wiring: tapping a node/edge opens the relevant modal.
-    cy.on('tap', 'node', (evt) => onOpenPerson(evt.target.id()));
-    cy.on('tap', 'edge', (evt) => onOpenEdge(evt.target.id()));
+    // --- React to graph (store) changes -----------------------------------
+    const unsubGraph = useGraphStore.subscribe((state) => {
+      if (modeRef.current !== 'none') {
+        renderGrouped();
+        return;
+      }
+      // none mode: incremental diff so positions/physics are preserved.
+      const wantNodes = new Map(state.nodes.map((n) => [n.id, n]));
+      const wantEdges = new Map(state.edges.map((e) => [e.id, e]));
+      cy.batch(() => {
+        cy.nodes().forEach((el) => wantNodes.has(el.id()) || el.remove());
+        cy.edges().forEach((el) => wantEdges.has(el.id()) || el.remove());
+        for (const [id, n] of wantNodes) {
+          const el = cy.getElementById(id);
+          if (el.empty()) cy.add(toNodeEl(n));
+          else if (el.data('label') !== (n.name || 'Unnamed')) el.data('label', n.name || 'Unnamed');
+        }
+        for (const [id, e] of wantEdges) {
+          const el = cy.getElementById(id);
+          if (el.empty()) cy.add(toEdgeEl(e));
+          else if (el.data('type') !== e.type) el.data('type', e.type);
+        }
+      });
+      const sig = structureSignature(state.nodes, state.edges);
+      if (sig !== sigRef.current) {
+        sigRef.current = sig;
+        seedCircles();
+      } else {
+        pinAdmin(cy, ADMIN_ID);
+      }
+      runPhysics();
+    });
+
+    // --- React to settings (mode / formula) changes -----------------------
+    const unsubSettings = useSettingsStore.subscribe((s) => {
+      const modeChanged = s.graphMode !== modeRef.current;
+      const formulaChanged = JSON.stringify(s.formula) !== JSON.stringify(formulaRef.current);
+      if (!modeChanged && !formulaChanged) return;
+      formulaRef.current = s.formula;
+      if (modeChanged) {
+        modeRef.current = s.graphMode;
+        expandedRef.current = new Set();
+      }
+      if (modeRef.current === 'none') renderNone();
+      else renderGrouped();
+    });
 
     return () => {
+      unsubGraph();
+      unsubSettings();
       cy.destroy();
       cyRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Reconcile store -> canvas on every graph change --------------------
-  // We diff by id rather than rebuilding, so cola keeps running and existing
-  // nodes keep their positions. Only genuinely new/removed/changed elements
-  // are touched.
-  useEffect(() => {
-    const unsub = useGraphStore.subscribe((state) => {
-      const cy = cyRef.current;
-      if (!cy) return;
-
-      const wantNodes = new Map(state.nodes.map((n) => [n.id, n]));
-      const wantEdges = new Map(state.edges.map((e) => [e.id, e]));
-
-      cy.batch(() => {
-        // Remove canvas elements no longer in the store.
-        cy.nodes().forEach((el) => {
-          if (!wantNodes.has(el.id())) el.remove();
-        });
-        cy.edges().forEach((el) => {
-          if (!wantEdges.has(el.id())) el.remove();
-        });
-
-        // Add or update nodes.
-        for (const [id, n] of wantNodes) {
-          const el = cy.getElementById(id);
-          if (el.empty()) {
-            cy.add(toNodeEl(n));
-          } else if (el.data('label') !== (n.name || 'Unnamed')) {
-            el.data('label', n.name || 'Unnamed');
-          }
-        }
-
-        // Add or update edges (type can change via the ConnectionModal).
-        for (const [id, e] of wantEdges) {
-          const el = cy.getElementById(id);
-          if (el.empty()) {
-            cy.add(toEdgeEl(e));
-          } else if (el.data('type') !== e.type) {
-            el.data('type', e.type);
-          }
-        }
-      });
-
-      // If the structure changed (a node/edge was added or removed), re-seed the
-      // clique circles so groups stay legible; otherwise leave positions alone
-      // (a label or connection-type edit shouldn't reshuffle the graph).
-      const sig = structureSignature(state.nodes, state.edges);
-      if (sig !== sigRef.current) {
-        sigRef.current = sig;
-        seedCircles(cy);
-      } else {
-        pinAdmin(cy, ADMIN_ID);
-      }
-      // Re-energise physics so new nodes settle from the seeded positions.
-      runPhysics(cy);
-    });
-
-    return unsub;
-  }, []);
-
-  // Step the zoom by a multiplicative factor, anchored at the canvas centre so
-  // the view stays put. Used by the +/- buttons.
+  // Step the zoom by a factor, anchored at the canvas centre.
   const zoomBy = (factor) => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.zoom({
-      level: cy.zoom() * factor,
-      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
-    });
+    cy.zoom({ level: cy.zoom() * factor, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   };
 
-  // The canvas fills its parent; the page controls the surrounding layout.
-  // Zoom controls sit in the bottom-right corner of the canvas.
   return (
     <>
       <div ref={containerRef} className="graph-canvas" />
