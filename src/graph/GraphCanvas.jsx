@@ -13,6 +13,16 @@ import cytoscape from 'cytoscape';
 import { useGraphStore, ADMIN_ID } from '../state/graphStore.js';
 import { cytoscapeStyles } from './cytoscapeStyles.js';
 import { registerPhysics, colaOptions, pinAdmin } from './physics.js';
+import { computeSeedPositions } from './cliqueLayout.js';
+
+// A signature of the graph's STRUCTURE (which nodes/edges exist), ignoring
+// labels/types. Used to re-seed the circular layout only when the shape
+// actually changes — not on every profile edit.
+function structureSignature(nodes, edges) {
+  const ns = nodes.map((n) => n.id).sort().join(',');
+  const es = edges.map((e) => e.id).sort().join(',');
+  return `${ns}|${es}`;
+}
 
 // Map a store node to a Cytoscape element. The Admin gets a class so the
 // stylesheet can single it out; `label` is what the canvas prints.
@@ -35,6 +45,31 @@ function toEdgeEl(e) {
 export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  const layoutRef = useRef(null); // the running cola layout (stopped before re-run)
+  const sigRef = useRef(''); // last structure signature we seeded for
+
+  // Position every non-Admin node on its clique circle, then pin the Admin at
+  // the centre. Called on mount and whenever the graph's structure changes, so
+  // dense groups start (and stay) as clean n-gons instead of a hairball.
+  const seedCircles = (cy) => {
+    const { nodes, edges } = useGraphStore.getState();
+    const center = { x: cy.width() / 2, y: cy.height() / 2 };
+    const pos = computeSeedPositions({ nodes, edges, adminId: ADMIN_ID, center });
+    cy.batch(() => {
+      for (const [id, p] of pos) {
+        const el = cy.getElementById(id);
+        if (!el.empty()) el.position(p);
+      }
+    });
+    pinAdmin(cy, ADMIN_ID);
+  };
+
+  // Stop any running layout, then start a fresh cola run from current positions.
+  const runPhysics = (cy) => {
+    layoutRef.current?.stop();
+    layoutRef.current = cy.layout(colaOptions);
+    layoutRef.current.run();
+  };
 
   // --- Mount / unmount the Cytoscape instance (once) ----------------------
   useEffect(() => {
@@ -54,10 +89,12 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
     });
     cyRef.current = cy;
 
-    // Start the continuous physics and pin the Admin to centre.
-    const layout = cy.layout(colaOptions);
-    layout.run();
-    pinAdmin(cy, ADMIN_ID);
+    // Lay the initial graph out as clique circles, remember its signature, then
+    // start the continuous physics that refines and holds the shape.
+    const s = useGraphStore.getState();
+    seedCircles(cy);
+    sigRef.current = structureSignature(s.nodes, s.edges);
+    runPhysics(cy);
     // Re-centre the Admin if the window (and thus the canvas) is resized.
     const onResize = () => pinAdmin(cy, ADMIN_ID);
     cy.on('resize', onResize);
@@ -115,9 +152,18 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
         }
       });
 
-      // Keep the Admin pinned and re-energise physics so new nodes settle.
-      pinAdmin(cy, ADMIN_ID);
-      cy.layout(colaOptions).run();
+      // If the structure changed (a node/edge was added or removed), re-seed the
+      // clique circles so groups stay legible; otherwise leave positions alone
+      // (a label or connection-type edit shouldn't reshuffle the graph).
+      const sig = structureSignature(state.nodes, state.edges);
+      if (sig !== sigRef.current) {
+        sigRef.current = sig;
+        seedCircles(cy);
+      } else {
+        pinAdmin(cy, ADMIN_ID);
+      }
+      // Re-energise physics so new nodes settle from the seeded positions.
+      runPhysics(cy);
     });
 
     return unsub;
