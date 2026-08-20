@@ -47,40 +47,37 @@ export const cytoscapeStyles = [
   // --- Group bubble (collapsed grouping mode) ----------------------------
   // A translucent disc standing in for a whole bucket of people; the label
   // (value + count) sits inside it. Sized per node via data(diam).
+  // Collapsed group bubble: same design as a normal node (it inherits the base
+  // node style) with a lighter ring to hint it stands for a whole bucket. The
+  // label ("UK · 3") sits beneath it like any node's name.
   {
     selector: 'node.group',
     style: {
-      'background-color': 'rgba(43,138,239,0.14)',
-      'background-opacity': 1,
-      'border-color': 'rgba(43,138,239,0.6)',
-      'border-width': 2,
-      shape: 'ellipse',
-      width: 'data(diam)',
-      height: 'data(diam)',
-      label: 'data(label)',
-      color: '#e9edf3',
-      'font-size': 13,
-      'font-weight': 'bold',
-      'text-valign': 'center',
-      'text-halign': 'center',
-      'text-wrap': 'wrap',
-      'text-max-width': 'data(diam)',
-      'text-outline-color': '#0a0c10',
-      'text-outline-width': 2
+      'border-color': '#8cc0f7',
+      'border-width': 3
     }
   },
-  // Expanded group backdrop: faint, dashed, label pinned to the top so it does
-  // not sit under the revealed member nodes. Clicking it collapses the group.
+  // Expanded group: a compound container that auto-sizes around its member
+  // nodes. Faint fill, dashed border, label pinned to the top. Clicking its
+  // padding collapses the group again.
   {
     selector: 'node.group.expanded',
     style: {
       'background-color': 'rgba(43,138,239,0.05)',
+      'background-opacity': 1,
+      shape: 'ellipse',
+      padding: 26,
       'border-style': 'dashed',
-      'border-color': 'rgba(43,138,239,0.4)',
+      'border-color': 'rgba(43,138,239,0.45)',
+      'border-width': 2,
+      label: 'data(label)',
+      color: '#9fb2c9',
+      'font-size': 12,
       'font-weight': 'normal',
       'text-valign': 'top',
+      'text-halign': 'center',
       'text-margin-y': 4,
-      'text-max-width': 200
+      'text-outline-width': 0
     }
   },
   // Selected node highlight.
@@ -101,6 +98,16 @@ export const cytoscapeStyles = [
       // Two directed edges between the same pair are separated so both arrows
       // are visible instead of overlapping into a single line.
       'control-point-step-size': 22
+    }
+  },
+  // Aggregate edge: a bubble is involved on at least one end, so the specific
+  // closeness is not meaningful — draw it neutral and a touch heavier.
+  {
+    selector: 'edge.agg',
+    style: {
+      width: 2,
+      'line-color': 'rgba(200,207,217,0.32)',
+      'target-arrow-color': 'rgba(200,207,217,0.32)'
     }
   },
   {
