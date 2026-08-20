@@ -51,6 +51,8 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
   const modeRef = useRef('none'); // current grouping mode
   const expandedRef = useRef(new Set()); // group keys currently expanded
   const formulaRef = useRef(useSettingsStore.getState().formula);
+  const rafRef = useRef(null); // container-tracking animation frame
+  const expandedMembersRef = useRef(new Map()); // groupKey → member ids (for tracking)
 
   useEffect(() => {
     registerPhysics();
@@ -101,6 +103,8 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
     // Full rebuild of the ungrouped graph from the store.
     const renderNone = () => {
       layoutRef.current?.stop();
+      stopTracking();
+      expandedMembersRef.current = new Map();
       const { nodes, edges } = useGraphStore.getState();
       cy.elements().remove();
       cy.add([...nodes.map(toNodeEl), ...edges.map(toEdgeEl)]);
@@ -109,19 +113,50 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
       runPhysics();
     };
 
-    // --- grouping modes: circular bubbles, deterministic layout -----------
-    // A collapsed group is a single node standing in for everyone inside it. An
-    // expanded group is a real CIRCLE (ellipse) container with its members laid
-    // out on a ring inside it — physics is off here so groups stay clean and the
-    // container is a true circle (Cytoscape compound parents can only be
-    // rectangles, so we don't use them). Edges are resolved to whichever end is
-    // visible: two people in different collapsed groups → one bubble↔bubble
-    // edge; a visible member wired into a collapsed group → a member↔bubble edge
-    // per member; two visible members → a normal edge.
+    // --- grouping modes: physics bubbles + tracking circle container -----
+    // A collapsed group is a single physics node standing in for everyone in it.
+    // An expanded group's members are real physics nodes (a clique settles into
+    // a circle, exactly like ungrouped), and a decorative CIRCLE container is
+    // drawn behind them and follows their bounding circle every frame — so the
+    // container is a true circle AND everything keeps normal physics. The
+    // container is excluded from the simulation so it never pushes its members.
+    // Edges resolve to whichever end is visible: two people in different
+    // collapsed groups → one bubble↔bubble edge; a visible member wired into a
+    // collapsed group → one member↔bubble edge per member; two visible members
+    // → a normal edge.
     const MEMBER_HALF = 21; // half a person node's diameter
-    const renderGrouped = (animateKey = null) => {
+
+    // Reposition + resize each expanded container to hug its members. Runs on an
+    // animation frame while any group is expanded so it tracks the live physics.
+    const updateContainers = () => {
+      for (const [key, ids] of expandedMembersRef.current) {
+        const bg = cy.getElementById(`grp:${key}`);
+        if (bg.empty()) continue;
+        const members = cy.collection(ids.map((id) => cy.getElementById(id)).filter((el) => !el.empty()));
+        if (members.empty()) continue;
+        const bb = members.boundingBox();
+        bg.position({ x: (bb.x1 + bb.x2) / 2, y: (bb.y1 + bb.y2) / 2 });
+        const diam = Math.round(Math.max(bb.w, bb.h) + 2 * MEMBER_HALF + 44);
+        if (bg.data('diam') !== diam) bg.data('diam', diam);
+      }
+    };
+    const stopTracking = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+    const trackLoop = () => {
+      updateContainers();
+      rafRef.current = requestAnimationFrame(trackLoop);
+    };
+    const startTracking = () => {
+      stopTracking();
+      if (expandedMembersRef.current.size > 0) trackLoop();
+    };
+
+    const renderGrouped = () => {
       layoutRef.current?.stop();
       layoutRef.current = null;
+      stopTracking();
       const { nodes, edges, adminName } = useGraphStore.getState();
       const f = formulaRef.current;
       const groups = groupPeople(nodes, modeRef.current);
@@ -139,58 +174,47 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
         return isExpanded(gk) ? personId : bubbleId(gk);
       };
 
-      // Inner ring radius + outer container radius for each group.
-      const innerR = (g) => ringRadius(g.ids.length, f.edgeLength);
-      const outerR = (g) =>
-        isExpanded(g.key) ? Math.max(64, innerR(g) + MEMBER_HALF + 22) : MEMBER_HALF;
-
-      // Place group anchors on a ring around the Admin, sized so the largest
-      // container never overlaps its neighbours.
-      const maxOuter = groups.length ? Math.max(...groups.map(outerR)) : 0;
-      const ringR =
-        K <= 1
-          ? f.groupRingRadius
-          : Math.max(f.groupRingRadius, (2 * maxOuter + f.clusterGap) / (2 * Math.sin(Math.PI / K)));
+      // Anchors (seed positions) on a ring around the Admin; physics refines.
       const anchorOf = (i) => {
         if (K <= 1) return { x: c.x, y: c.y - f.groupRingRadius };
         const a = -Math.PI / 2 + (2 * Math.PI * i) / K;
-        return { x: c.x + ringR * Math.cos(a), y: c.y + ringR * Math.sin(a) };
+        return { x: c.x + f.groupRingRadius * Math.cos(a), y: c.y + f.groupRingRadius * Math.sin(a) };
       };
 
       cy.elements().remove();
       cy.add({ group: 'nodes', data: { id: ADMIN_ID, label: adminName || 'Me' }, classes: 'admin' });
       cy.getElementById(ADMIN_ID).position(c);
 
-      const toAnimate = []; // members of the just-expanded group, for the reveal
+      const trackMap = new Map();
 
       groups.forEach((g, i) => {
         const anchor = anchorOf(i);
         if (isExpanded(g.key)) {
-          // The circular container (behind the members) + a collapse target.
-          const diam = 2 * outerR(g);
+          // Decorative container (excluded from physics, follows its members).
           cy.add({
             group: 'nodes',
-            data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, diam, groupKey: g.key },
+            data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, diam: 120, groupKey: g.key },
             classes: 'group expanded'
           });
-          cy.getElementById(bubbleId(g.key)).position(anchor).ungrabify();
-          // Members on a ring inside the container.
-          const r = innerR(g);
+          cy.getElementById(bubbleId(g.key)).lock().ungrabify().unselectify();
+          // Members: real physics nodes, seeded on a ring around the anchor.
+          const r = ringRadius(g.ids.length, f.edgeLength);
           g.ids.forEach((id, j) => {
             const node = nodes.find((n) => n.id === id);
             cy.add(toNodeEl(node));
             const t = -Math.PI / 2 + (2 * Math.PI * j) / g.ids.length;
             const p = g.ids.length === 1 ? anchor : { x: anchor.x + r * Math.cos(t), y: anchor.y + r * Math.sin(t) };
             cy.getElementById(id).position(p);
-            if (g.key === animateKey) toAnimate.push({ id, anchor, p });
           });
+          trackMap.set(g.key, [...g.ids]);
         } else {
+          // Collapsed bubble: a normal physics node standing for the bucket.
           cy.add({
             group: 'nodes',
             data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, groupKey: g.key },
             classes: 'group'
           });
-          cy.getElementById(bubbleId(g.key)).position(anchor).ungrabify();
+          cy.getElementById(bubbleId(g.key)).position(anchor);
         }
       });
 
@@ -211,29 +235,22 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
         });
       }
 
+      expandedMembersRef.current = trackMap;
       pinAdmin(cy, ADMIN_ID);
-
-      // Reveal animation: members grow out from the container centre.
-      if (toAnimate.length) {
-        for (const { id, anchor, p } of toAnimate) {
-          const el = cy.getElementById(id);
-          el.position(anchor);
-          el.style('opacity', 0);
-          el.animate({ position: p, style: { opacity: 1 } }, { duration: f.expandMs, easing: 'ease-out' });
-        }
+      updateContainers(); // size the containers before the first frame
+      // Run physics over everything EXCEPT the decorative containers.
+      if (f.physics) {
+        layoutRef.current = cy.elements().not('.group.expanded').layout(buildColaOptions(f));
+        layoutRef.current.run();
       }
+      startTracking();
     };
 
-    // Toggle a group's expanded state (from a bubble tap) and re-render. On
-    // expand, pass the key so its members animate out from the centre.
+    // Toggle a group's expanded state (from a bubble tap) and re-render.
     const toggleGroup = (key) => {
-      if (expandedRef.current.has(key)) {
-        expandedRef.current.delete(key);
-        renderGrouped();
-      } else {
-        expandedRef.current.add(key);
-        renderGrouped(key);
-      }
+      if (expandedRef.current.has(key)) expandedRef.current.delete(key);
+      else expandedRef.current.add(key);
+      renderGrouped();
     };
 
     // --- Initial render ----------------------------------------------------
@@ -303,6 +320,7 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
     return () => {
       unsubGraph();
       unsubSettings();
+      stopTracking();
       cy.destroy();
       cyRef.current = null;
     };
