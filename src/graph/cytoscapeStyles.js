@@ -57,28 +57,28 @@ export const cytoscapeStyles = [
       'border-width': 3
     }
   },
-  // Expanded group: a compound container that auto-sizes around its member
-  // nodes. Cytoscape compound parents are always rectangular and ignore an
-  // rgba alpha in background-color (they use background-opacity instead), so we
-  // use a solid tint + low opacity to get a soft, rounded, translucent panel.
+  // Expanded group: a true CIRCLE container (sized via data(diam)) sitting
+  // behind its member nodes, with a soft tint and a dashed rim. Label pinned
+  // above. Clicking it collapses the group.
   {
     selector: 'node.group.expanded',
     style: {
-      shape: 'round-rectangle',
+      shape: 'ellipse',
+      width: 'data(diam)',
+      height: 'data(diam)',
       'background-color': '#2b8aef',
       'background-opacity': 0.06,
-      padding: 30,
       'border-width': 1.5,
       'border-style': 'dashed',
       'border-color': '#4a9bf0',
-      'border-opacity': 0.45,
+      'border-opacity': 0.5,
       label: 'data(label)',
       color: '#9fb2c9',
       'font-size': 12,
       'font-weight': 600,
       'text-valign': 'top',
       'text-halign': 'center',
-      'text-margin-y': -4,
+      'text-margin-y': -6,
       'text-outline-width': 0
     }
   },

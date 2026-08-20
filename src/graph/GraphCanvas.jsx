@@ -109,16 +109,17 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
       runPhysics();
     };
 
-    // --- grouping modes: bubbles are real physics nodes -------------------
-    // A collapsed group is a single node (styled like a normal node) that stands
-    // in for everyone inside it. An expanded group is a compound container whose
-    // children are the real member nodes. Edges are resolved to whichever end is
-    // visible: two people in different collapsed groups yield ONE bubble↔bubble
-    // edge; a visible member wired to someone in a collapsed group yields a
-    // member↔bubble edge; two visible members yield a normal edge. Everything is
-    // then laid out (seeded as clique circles) and run through the same cola
-    // physics as ungrouped nodes, so bubbles drag and settle like nodes.
-    const renderGrouped = () => {
+    // --- grouping modes: circular bubbles, deterministic layout -----------
+    // A collapsed group is a single node standing in for everyone inside it. An
+    // expanded group is a real CIRCLE (ellipse) container with its members laid
+    // out on a ring inside it — physics is off here so groups stay clean and the
+    // container is a true circle (Cytoscape compound parents can only be
+    // rectangles, so we don't use them). Edges are resolved to whichever end is
+    // visible: two people in different collapsed groups → one bubble↔bubble
+    // edge; a visible member wired into a collapsed group → a member↔bubble edge
+    // per member; two visible members → a normal edge.
+    const MEMBER_HALF = 21; // half a person node's diameter
+    const renderGrouped = (animateKey = null) => {
       layoutRef.current?.stop();
       layoutRef.current = null;
       const { nodes, edges, adminName } = useGraphStore.getState();
@@ -126,14 +127,11 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
       const groups = groupPeople(nodes, modeRef.current);
       const c = center();
       const K = groups.length;
-      const slotR = K === 0 ? 0 : f.groupRingRadius;
 
-      // personId → its group key (for edge resolution).
       const groupOf = new Map();
       groups.forEach((g) => g.ids.forEach((id) => groupOf.set(id, g.key)));
       const bubbleId = (key) => `grp:${key}`;
       const isExpanded = (key) => expandedRef.current.has(key);
-      // Resolve a person to the node that represents them right now.
       const rep = (personId) => {
         if (personId === ADMIN_ID) return ADMIN_ID;
         const gk = groupOf.get(personId);
@@ -141,31 +139,50 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
         return isExpanded(gk) ? personId : bubbleId(gk);
       };
 
+      // Inner ring radius + outer container radius for each group.
+      const innerR = (g) => ringRadius(g.ids.length, f.edgeLength);
+      const outerR = (g) =>
+        isExpanded(g.key) ? Math.max(64, innerR(g) + MEMBER_HALF + 22) : MEMBER_HALF;
+
+      // Place group anchors on a ring around the Admin, sized so the largest
+      // container never overlaps its neighbours.
+      const maxOuter = groups.length ? Math.max(...groups.map(outerR)) : 0;
+      const ringR =
+        K <= 1
+          ? f.groupRingRadius
+          : Math.max(f.groupRingRadius, (2 * maxOuter + f.clusterGap) / (2 * Math.sin(Math.PI / K)));
+      const anchorOf = (i) => {
+        if (K <= 1) return { x: c.x, y: c.y - f.groupRingRadius };
+        const a = -Math.PI / 2 + (2 * Math.PI * i) / K;
+        return { x: c.x + ringR * Math.cos(a), y: c.y + ringR * Math.sin(a) };
+      };
+
       cy.elements().remove();
       cy.add({ group: 'nodes', data: { id: ADMIN_ID, label: adminName || 'Me' }, classes: 'admin' });
       cy.getElementById(ADMIN_ID).position(c);
 
-      // Add group nodes (collapsed bubble) or compound container + members, and
-      // seed positions so the physics starts clean.
-      groups.forEach((g, i) => {
-        const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(1, K);
-        const slot =
-          K <= 1 ? { x: c.x, y: c.y - slotR } : { x: c.x + slotR * Math.cos(a), y: c.y + slotR * Math.sin(a) };
+      const toAnimate = []; // members of the just-expanded group, for the reveal
 
+      groups.forEach((g, i) => {
+        const anchor = anchorOf(i);
         if (isExpanded(g.key)) {
-          // Compound parent (auto-sizes around its children) + member nodes.
+          // The circular container (behind the members) + a collapse target.
+          const diam = 2 * outerR(g);
           cy.add({
             group: 'nodes',
-            data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, groupKey: g.key },
+            data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, diam, groupKey: g.key },
             classes: 'group expanded'
           });
-          const r = ringRadius(g.ids.length, f.edgeLength);
+          cy.getElementById(bubbleId(g.key)).position(anchor).ungrabify();
+          // Members on a ring inside the container.
+          const r = innerR(g);
           g.ids.forEach((id, j) => {
             const node = nodes.find((n) => n.id === id);
-            cy.add({ group: 'nodes', data: { id, label: node?.name || 'Unnamed', parent: bubbleId(g.key) } });
+            cy.add(toNodeEl(node));
             const t = -Math.PI / 2 + (2 * Math.PI * j) / g.ids.length;
-            const p = g.ids.length === 1 ? slot : { x: slot.x + r * Math.cos(t), y: slot.y + r * Math.sin(t) };
+            const p = g.ids.length === 1 ? anchor : { x: anchor.x + r * Math.cos(t), y: anchor.y + r * Math.sin(t) };
             cy.getElementById(id).position(p);
+            if (g.key === animateKey) toAnimate.push({ id, anchor, p });
           });
         } else {
           cy.add({
@@ -173,7 +190,7 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
             data: { id: bubbleId(g.key), label: `${g.label} · ${g.ids.length}`, groupKey: g.key },
             classes: 'group'
           });
-          cy.getElementById(bubbleId(g.key)).position(slot);
+          cy.getElementById(bubbleId(g.key)).position(anchor).ungrabify();
         }
       });
 
@@ -182,7 +199,7 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
       for (const e of edges) {
         const rs = rep(e.source);
         const rt = rep(e.target);
-        if (rs === rt) continue; // internal to one collapsed bubble, or self
+        if (rs === rt) continue;
         const key = rs < rt ? `${rs}|${rt}` : `${rt}|${rs}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -195,16 +212,28 @@ export default function GraphCanvas({ onOpenPerson, onOpenEdge }) {
       }
 
       pinAdmin(cy, ADMIN_ID);
-      // Same physics as ungrouped: run cola over the reduced graph.
-      layoutRef.current = cy.layout(buildColaOptions(f));
-      layoutRef.current.run();
+
+      // Reveal animation: members grow out from the container centre.
+      if (toAnimate.length) {
+        for (const { id, anchor, p } of toAnimate) {
+          const el = cy.getElementById(id);
+          el.position(anchor);
+          el.style('opacity', 0);
+          el.animate({ position: p, style: { opacity: 1 } }, { duration: f.expandMs, easing: 'ease-out' });
+        }
+      }
     };
 
-    // Toggle a group's expanded state (from a bubble tap) and re-render.
+    // Toggle a group's expanded state (from a bubble tap) and re-render. On
+    // expand, pass the key so its members animate out from the centre.
     const toggleGroup = (key) => {
-      if (expandedRef.current.has(key)) expandedRef.current.delete(key);
-      else expandedRef.current.add(key);
-      renderGrouped();
+      if (expandedRef.current.has(key)) {
+        expandedRef.current.delete(key);
+        renderGrouped();
+      } else {
+        expandedRef.current.add(key);
+        renderGrouped(key);
+      }
     };
 
     // --- Initial render ----------------------------------------------------
